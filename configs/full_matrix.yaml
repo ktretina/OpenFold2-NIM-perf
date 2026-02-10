@@ -1,0 +1,54 @@
+# Comprehensive benchmark (8-12 hours)
+output_dir: results
+run_id: null
+
+gpu:
+  device_ids: [0]
+  sampling_interval_ms: 50
+
+nim:
+  enabled: true
+  container_image: "nvcr.io/nim/openfold/openfold2:latest"
+  cache_dir: "${FAST_CACHE:-$HOME}/nim_cache"
+  port: 8000
+  base_url: null
+  backend: "tensorrt"
+  model_sets:
+    - [3]
+    - [1, 2, 3, 4, 5]
+
+openfold:
+  enabled: true
+  repo_path: "${FAST_CACHE:-$HOME}/openfold_repo"
+  commit_hash: "main"
+  model_presets:
+    - "model_3_ptm"
+  precision: "bf16"
+  use_deepspeed: false
+
+suites:
+  # Accuracy evaluation
+  - name: accuracy_small
+    targets_file: bench/dataset/targets.yaml
+    msa_depth: 1
+    repeats: 3
+    warmup_runs: 1
+
+  # Sequence length scaling
+  - name: scaling_seq_length
+    sequences:
+      - {id: "synth_128", length: 128}
+      - {id: "synth_256", length: 256}
+      - {id: "synth_512", length: 512}
+      - {id: "synth_768", length: 768}
+    msa_depth: 8
+    repeats: 3
+    warmup_runs: 1
+
+  # MSA depth scaling
+  - name: scaling_msa_depth
+    sequences:
+      - {id: "synth_fixed", length: 256}
+    msa_depths: [1, 8, 32, 128, 512]
+    repeats: 3
+    warmup_runs: 1

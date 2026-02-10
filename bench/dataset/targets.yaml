@@ -1,0 +1,146 @@
+# Gold-standard benchmark dataset for OpenFold2-NIM comparison
+# Selection criteria: diverse folds, high-quality structures, single-domain, monomeric
+
+targets:
+  # Small α-helical proteins
+  - pdb_id: 1VII
+    chain: A
+    description: "Villin headpiece subdomain (all-α)"
+    length: 36
+    resolution: 1.80
+    fold_type: "alpha"
+
+  - pdb_id: 2KHE
+    chain: A
+    description: "HP36 villin (all-α, designed)"
+    length: 36
+    resolution: NMR
+    fold_type: "alpha"
+
+  - pdb_id: 1MBN
+    chain: A
+    description: "Myoglobin (all-α)"
+    length: 153
+    resolution: 1.60
+    fold_type: "alpha"
+
+  - pdb_id: 1UBQ
+    chain: A
+    description: "Ubiquitin (α+β)"
+    length: 76
+    resolution: 1.80
+    fold_type: "alpha_beta"
+
+  # β-sheet proteins
+  - pdb_id: 1L2Y
+    chain: A
+    description: "Trp-cage (α-helix + β-turn)"
+    length: 20
+    resolution: NMR
+    fold_type: "alpha"
+
+  - pdb_id: 1PIN
+    chain: A
+    description: "Protein G B1 domain (α+β)"
+    length: 56
+    resolution: 2.10
+    fold_type: "alpha_beta"
+
+  - pdb_id: 1IMQ
+    chain: B
+    description: "Immunoglobulin binding domain (β-sandwich)"
+    length: 61
+    resolution: 1.90
+    fold_type: "beta"
+
+  - pdb_id: 1SHG
+    chain: A
+    description: "SH3 domain (all-β)"
+    length: 62
+    resolution: 1.80
+    fold_type: "beta"
+
+  - pdb_id: 1FMK
+    chain: C
+    description: "FKBP12 (β-sheet)"
+    length: 107
+    resolution: 1.70
+    fold_type: "beta"
+
+  - pdb_id: 2CBA
+    chain: A
+    description: "Carbonic anhydrase II (α+β)"
+    length: 259
+    resolution: 2.00
+    fold_type: "alpha_beta"
+
+  # Medium-length diverse folds
+  - pdb_id: 1BPI
+    chain: A
+    description: "Bovine pancreatic trypsin inhibitor (α+β)"
+    length: 58
+    resolution: 1.50
+    fold_type: "alpha_beta"
+
+  - pdb_id: 1ENH
+    chain: A
+    description: "Engrailed homeodomain (all-α)"
+    length: 61
+    resolution: 1.90
+    fold_type: "alpha"
+
+  - pdb_id: 1RGG
+    chain: A
+    description: "Ribonuclease A (α+β)"
+    length: 124
+    resolution: 1.26
+    fold_type: "alpha_beta"
+
+  - pdb_id: 1AKO
+    chain: A
+    description: "Phosphocarrier protein HPr (α+β)"
+    length: 85
+    resolution: 1.50
+    fold_type: "alpha_beta"
+
+  - pdb_id: 1CRN
+    chain: A
+    description: "Crambin (α+β, small)"
+    length: 46
+    resolution: 0.54
+    fold_type: "alpha_beta"
+
+  - pdb_id: 1HRC
+    chain: A
+    description: "Cytochrome c (all-α)"
+    length: 103
+    resolution: 1.50
+    fold_type: "alpha"
+
+  - pdb_id: 1LZ1
+    chain: A
+    description: "T4 lysozyme (α+β)"
+    length: 162
+    resolution: 1.70
+    fold_type: "alpha_beta"
+
+  - pdb_id: 2LZM
+    chain: A
+    description: "Hen egg-white lysozyme (α+β)"
+    length: 129
+    resolution: 1.65
+    fold_type: "alpha_beta"
+
+  - pdb_id: 1ORC
+    chain: A
+    description: "Barnase (α+β)"
+    length: 110
+    resolution: 1.50
+    fold_type: "alpha_beta"
+
+  - pdb_id: 3HHR
+    chain: A
+    description: "Ribonuclease H (α+β)"
+    length: 155
+    resolution: 1.48
+    fold_type: "alpha_beta"
