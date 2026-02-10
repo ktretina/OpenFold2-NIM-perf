@@ -229,7 +229,9 @@ class OpenFoldRunner(RunnerBase):
         nvml_sampler.start()
         system_sampler.start()
 
-        t0 = subprocess.time.time() if hasattr(subprocess, 'time') else __import__('time').time()
+        # Fix #9: subprocess doesn't have time module
+        import time
+        t0 = time.time()
 
         # Run subprocess
         try:
@@ -272,7 +274,7 @@ class OpenFoldRunner(RunnerBase):
 
         logger.info("OpenFold prediction completed in %.2fs", wall_time)
 
-        # Parse output structure
+        # Parse output structure (Fix #10: Better output validation)
         # OpenFold writes to predictions/<target_id>/relaxed_model_*.pdb
         pred_dir = output_dir / "predictions" / target_id
         if not pred_dir.exists():
@@ -284,10 +286,26 @@ class OpenFoldRunner(RunnerBase):
             structure_files = list(pred_dir.glob("unrelaxed_model_*.pdb"))
 
         if not structure_files:
-            raise RuntimeError(
-                f"No output structures found in {pred_dir}. "
-                f"Check OpenFold logs for errors."
+            # Log directory contents for debugging
+            if pred_dir.exists():
+                dir_contents = list(pred_dir.iterdir())
+                logger.error("OpenFold output directory contents: %s", [str(p.name) for p in dir_contents])
+            else:
+                logger.error("OpenFold output directory does not exist: %s", pred_dir)
+                logger.error("Expected output_dir: %s", output_dir)
+
+            # Check if output_dir was created at all
+            if not output_dir.exists():
+                logger.error("Output directory was never created - OpenFold may have failed early")
+
+            error_msg = (
+                f"OpenFold completed but produced no structures in {pred_dir}. "
+                f"Check logs for errors. "
             )
+            if stderr:
+                error_msg += f"STDERR: {stderr.decode()[:500]}"
+
+            raise RuntimeError(error_msg)
 
         # Take the first structure (or could rank by pLDDT if timings.json available)
         best_structure = structure_files[0]

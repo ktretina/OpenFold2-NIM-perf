@@ -11,6 +11,14 @@ from plotly.subplots import make_subplots
 from bench.analysis.pareto import compute_pareto_by_system
 from bench.logging import logger
 
+# Fix #4: Make kaleido optional
+try:
+    import kaleido
+    KALEIDO_AVAILABLE = True
+except ImportError:
+    KALEIDO_AVAILABLE = False
+    logger.info("Kaleido not available - PNG export will be skipped. Install with: pip install kaleido")
+
 
 COLORS = {
     "nim": "#1f77b4",  # Blue
@@ -140,10 +148,11 @@ def plot_pareto_curve(df: pd.DataFrame, output_dir: Path):
     png_path = output_dir / "pareto_curve.png"
 
     fig.write_html(str(html_path))
-    try:
-        fig.write_image(str(png_path), width=1200, height=800, scale=2)
-    except Exception as e:
-        logger.warning(f"Failed to save PNG (kaleido may not be installed): {e}")
+    if KALEIDO_AVAILABLE:
+        try:
+            fig.write_image(str(png_path), width=1200, height=800, scale=2)
+        except Exception as e:
+            logger.warning(f"Failed to save PNG: {e}")
 
     logger.info(f"Saved Pareto plot to {html_path}")
 
@@ -302,10 +311,11 @@ def plot_scaling_sequence_length(df: pd.DataFrame, output_dir: Path):
     png_path = output_dir / "scaling_seq_length.png"
 
     fig.write_html(str(html_path))
-    try:
-        fig.write_image(str(png_path), width=1400, height=1000, scale=2)
-    except Exception as e:
-        logger.warning(f"Failed to save PNG: {e}")
+    if KALEIDO_AVAILABLE:
+        try:
+            fig.write_image(str(png_path), width=1400, height=1000, scale=2)
+        except Exception as e:
+            logger.warning(f"Failed to save PNG: {e}")
 
     logger.info(f"Saved scaling plot to {html_path}")
 
@@ -338,10 +348,11 @@ def plot_gpu_utilization_distribution(df: pd.DataFrame, output_dir: Path):
     png_path = output_dir / "gpu_util_distribution.png"
 
     fig.write_html(str(html_path))
-    try:
-        fig.write_image(str(png_path), width=1200, height=600, scale=2)
-    except Exception as e:
-        logger.warning(f"Failed to save PNG: {e}")
+    if KALEIDO_AVAILABLE:
+        try:
+            fig.write_image(str(png_path), width=1200, height=600, scale=2)
+        except Exception as e:
+            logger.warning(f"Failed to save PNG: {e}")
 
     logger.info(f"Saved utilization plot to {html_path}")
 
@@ -382,10 +393,11 @@ def plot_accuracy_per_target(df: pd.DataFrame, output_dir: Path):
     png_path = output_dir / "accuracy_per_target.png"
 
     fig.write_html(str(html_path))
-    try:
-        fig.write_image(str(png_path), width=1600, height=600, scale=2)
-    except Exception as e:
-        logger.warning(f"Failed to save PNG: {e}")
+    if KALEIDO_AVAILABLE:
+        try:
+            fig.write_image(str(png_path), width=1600, height=600, scale=2)
+        except Exception as e:
+            logger.warning(f"Failed to save PNG: {e}")
 
     logger.info(f"Saved accuracy plot to {html_path}")
 
@@ -427,10 +439,11 @@ def plot_energy_efficiency(df: pd.DataFrame, output_dir: Path):
     png_path = output_dir / "energy_efficiency.png"
 
     fig.write_html(str(html_path))
-    try:
-        fig.write_image(str(png_path), width=1200, height=800, scale=2)
-    except Exception as e:
-        logger.warning(f"Failed to save PNG: {e}")
+    if KALEIDO_AVAILABLE:
+        try:
+            fig.write_image(str(png_path), width=1200, height=800, scale=2)
+        except Exception as e:
+            logger.warning(f"Failed to save PNG: {e}")
 
     logger.info(f"Saved energy plot to {html_path}")
 

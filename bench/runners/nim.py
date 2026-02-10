@@ -100,9 +100,19 @@ class NIMRunner(RunnerBase):
         if self.config.backend == "torch":
             env["NIM_OPTIMIZED_BACKEND"] = "torch"
 
-        # Create cache directory
-        cache_dir = Path(self.config.cache_dir)
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        # Create cache directory (Fix #12: Validate write permissions)
+        cache_dir = Path(self.config.cache_dir).resolve()
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            # Test write permission
+            test_file = cache_dir / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+        except PermissionError as e:
+            raise RuntimeError(
+                f"Cannot write to cache directory: {cache_dir}. "
+                f"Check permissions or set cache_dir in config."
+            ) from e
 
         # Generate unique container name
         self._container_name = f"openfold2-nim-{uuid.uuid4().hex[:8]}"
@@ -112,38 +122,54 @@ class NIMRunner(RunnerBase):
         logger.info("Backend: %s", self.config.backend)
         logger.info("GPUs: %s", self.gpu_ids)
 
-        # Start container
-        try:
-            self.container = client.containers.run(
-                self.config.container_image,
-                detach=True,
-                device_requests=[
-                    docker.types.DeviceRequest(
-                        device_ids=[str(i) for i in self.gpu_ids],
-                        capabilities=[["gpu"]],
-                    )
-                ],
-                ports={"8000/tcp": self.config.port},
-                volumes={
-                    str(cache_dir.absolute()): {"bind": "/opt/nim/.cache", "mode": "rw"}
-                },
-                environment=env,
-                name=self._container_name,
-                remove=False,  # Keep container for debugging
-            )
+        # Start container (Fix #8: Handle port conflicts)
+        port = self.config.port
+        for attempt in range(10):
+            try:
+                self.container = client.containers.run(
+                    self.config.container_image,
+                    detach=True,
+                    device_requests=[
+                        docker.types.DeviceRequest(
+                            device_ids=[str(i) for i in self.gpu_ids],
+                            capabilities=[["gpu"]],
+                        )
+                    ],
+                    ports={"8000/tcp": port},
+                    volumes={
+                        str(cache_dir.absolute()): {"bind": "/opt/nim/.cache", "mode": "rw"}
+                    },
+                    environment=env,
+                    name=self._container_name,
+                    remove=False,  # Keep container for debugging
+                )
 
-            self.base_url = f"http://localhost:{self.config.port}"
+                self.base_url = f"http://localhost:{port}"
+                if port != self.config.port:
+                    logger.info("Using alternate port %d (default port %d was in use)", port, self.config.port)
 
-            # Wait for ready and record cold start time
-            logger.info("Waiting for NIM to be ready...")
-            t0 = time.time()
-            self._wait_for_ready(timeout=600)
-            cold_start_time = time.time() - t0
-            logger.info("NIM ready! Cold start time: %.1fs", cold_start_time)
+                # Wait for ready and record cold start time
+                logger.info("Waiting for NIM to be ready...")
+                t0 = time.time()
+                self._wait_for_ready(timeout=600)
+                cold_start_time = time.time() - t0
+                logger.info("NIM ready! Cold start time: %.1fs", cold_start_time)
+                break
 
-        except docker.errors.DockerException as e:
-            logger.error("Failed to start NIM container: %s", e)
-            raise
+            except docker.errors.APIError as e:
+                # Check if port conflict error
+                if "port is already allocated" in str(e).lower() or "address already in use" in str(e).lower():
+                    logger.warning("Port %d is in use, trying port %d", port, port + 1)
+                    port += 1
+                    if attempt == 9:
+                        logger.error("All ports %d-%d are in use", self.config.port, port)
+                        raise RuntimeError(f"Cannot find available port for NIM (tried {self.config.port}-{port})")
+                else:
+                    logger.error("Failed to start NIM container: %s", e)
+                    raise
+            except docker.errors.DockerException as e:
+                logger.error("Failed to start NIM container: %s", e)
+                raise
 
     def _wait_for_ready(self, timeout: int = 600):
         """

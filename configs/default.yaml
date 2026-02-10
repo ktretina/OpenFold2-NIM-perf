@@ -1,5 +1,11 @@
 # Fast benchmark configuration (~1-2 hours on single GPU)
-output_dir: results
+#
+# Environment variables used:
+#   FAST_CACHE - Fast storage location (default: $HOME)
+#   RESULTS_DIR - Output directory (default: results)
+#   NGC_API_KEY - NVIDIA NGC API key (required for NIM)
+
+output_dir: ${RESULTS_DIR:-results}
 run_id: null  # Auto-generated if null
 
 gpu:
@@ -9,26 +15,29 @@ gpu:
 nim:
   enabled: true
   container_image: "nvcr.io/nim/openfold/openfold2:latest"
+  # cache_dir: Fast storage for NIM model cache (~50GB)
   cache_dir: "${FAST_CACHE:-$HOME}/nim_cache"
   port: 8000
-  base_url: null  # Start local container
-  backend: "tensorrt"
+  base_url: null  # Start local container (set to http://host:port to use existing NIM)
+  backend: "tensorrt"  # Options: tensorrt (fast), torch (slower)
   model_sets:
     - [3]              # Fast: single model
-    - [1, 2, 3, 4, 5]  # Slow: ensemble
+    - [1, 2, 3, 4, 5]  # Slow: ensemble (5x models)
 
 openfold:
   enabled: true
+  # repo_path: Location to clone OpenFold repository
   repo_path: "${FAST_CACHE:-$HOME}/openfold_repo"
-  commit_hash: "main"
+  commit_hash: "main"  # Git commit to checkout
   model_presets:
-    - "model_3_ptm"
-  precision: "bf16"
-  use_deepspeed: false
+    - "model_3_ptm"  # Options: model_1, model_2, model_3, model_3_ptm, etc.
+  precision: "bf16"  # Options: bf16, fp32
+  use_deepspeed: false  # Enable DeepSpeed inference optimization
 
 suites:
+  # Accuracy evaluation suite
   - name: accuracy_small
-    targets_file: bench/dataset/targets.yaml
-    msa_depth: 1
-    repeats: 3
-    warmup_runs: 1
+    targets_file: bench/dataset/targets.yaml  # Relative paths resolved from package root
+    msa_depth: 1  # Synthetic MSA depth
+    repeats: 3  # Number of repeated measurements
+    warmup_runs: 1  # Warm-up iterations

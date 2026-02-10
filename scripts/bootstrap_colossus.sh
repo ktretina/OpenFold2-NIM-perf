@@ -26,10 +26,23 @@ if ! docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu20.04 nvidia-smi &
     exit 1
 fi
 
-# Check NGC_API_KEY if running NIM
+# Check NGC_API_KEY if running NIM (Fix #2: Make this a blocker)
 if [ -z "$NGC_API_KEY" ]; then
-    echo "WARNING: NGC_API_KEY not set. Required for NIM."
-    echo "Get your key from: https://catalog.ngc.nvidia.com/"
+    echo "ERROR: NGC_API_KEY environment variable not set. Required for NIM."
+    echo "Get your API key from: https://catalog.ngc.nvidia.com/"
+    echo ""
+    echo "To set your API key:"
+    echo "  export NGC_API_KEY=your_key_here"
+    echo ""
+    echo "Or to skip NIM benchmarks, disable NIM in your config file."
+    exit 1
+fi
+
+# Verify NGC_API_KEY is exported (not just defined)
+if ! env | grep -q "^NGC_API_KEY="; then
+    echo "ERROR: NGC_API_KEY is set but not exported."
+    echo "Use: export NGC_API_KEY=your_key_here"
+    exit 1
 fi
 
 # 2. Determine fastest storage location
@@ -57,11 +70,31 @@ mkdir -p "$FAST_CACHE/nim_cache"
 mkdir -p "$FAST_CACHE/openfold_repo"
 mkdir -p "$FAST_CACHE/datasets"
 
-# 4. Check disk space
+# 4. Check disk space (Fix #3: More robust disk space checks)
 AVAILABLE_GB=$(df -BG "$FAST_CACHE" | tail -1 | awk '{print $4}' | sed 's/G//')
-echo "Available disk space: ${AVAILABLE_GB}GB"
+echo "Available disk space in $FAST_CACHE: ${AVAILABLE_GB}GB"
+
+# Check /tmp space (often separate partition)
+TMP_AVAILABLE_GB=$(df -BG /tmp 2>/dev/null | tail -1 | awk '{print $4}' | sed 's/G//' || echo "999")
+echo "Available disk space in /tmp: ${TMP_AVAILABLE_GB}GB"
+
+# Error if critically low space
+if [ "$AVAILABLE_GB" -lt 50 ]; then
+    echo "ERROR: Critically low disk space (${AVAILABLE_GB}GB available)."
+    echo "Need at least 50GB, recommend 100GB for full benchmark."
+    echo "Free up space or use a smaller config."
+    echo ""
+    echo "To override this check (not recommended):"
+    echo "  SKIP_DISK_CHECK=1 $0"
+    [ -z "$SKIP_DISK_CHECK" ] && exit 1
+fi
+
+# Warn if below recommended
 if [ "$AVAILABLE_GB" -lt 100 ]; then
-    echo "WARNING: Less than 100GB available. Benchmark may fail due to insufficient space."
+    echo "WARNING: Less than 100GB available (found ${AVAILABLE_GB}GB)."
+    echo "Full benchmark requires ~100GB. Consider using smaller config or freeing space."
+    echo "Continuing in 5 seconds... (Ctrl+C to cancel)"
+    sleep 5
 fi
 
 # 5. Pre-pull large containers (optional, saves time)

@@ -1,21 +1,27 @@
-# Comprehensive benchmark (8-12 hours)
-output_dir: results
-run_id: null
+# Comprehensive benchmark configuration (8-12 hours)
+#
+# Environment variables used:
+#   FAST_CACHE - Fast storage location (default: $HOME)
+#   RESULTS_DIR - Output directory (default: results)
+#   NGC_API_KEY - NVIDIA NGC API key (required for NIM)
+
+output_dir: ${RESULTS_DIR:-results}
+run_id: null  # Auto-generated if null
 
 gpu:
-  device_ids: [0]
-  sampling_interval_ms: 50
+  device_ids: [0]  # GPU device IDs to use
+  sampling_interval_ms: 50  # GPU metrics sampling interval
 
 nim:
   enabled: true
   container_image: "nvcr.io/nim/openfold/openfold2:latest"
   cache_dir: "${FAST_CACHE:-$HOME}/nim_cache"
   port: 8000
-  base_url: null
+  base_url: null  # Start local container
   backend: "tensorrt"
   model_sets:
-    - [3]
-    - [1, 2, 3, 4, 5]
+    - [3]              # Single model
+    - [1, 2, 3, 4, 5]  # Ensemble
 
 openfold:
   enabled: true
@@ -29,7 +35,7 @@ openfold:
 suites:
   # Accuracy evaluation
   - name: accuracy_small
-    targets_file: bench/dataset/targets.yaml
+    targets_file: bench/dataset/targets.yaml  # Relative paths resolved from package root
     msa_depth: 1
     repeats: 3
     warmup_runs: 1

@@ -29,9 +29,14 @@ cd openfold2-bench
 # Install dependencies with pip
 pip install -e .
 
+# Optional: Install PNG export support (recommended)
+pip install -e .[plots]
+
 # Set NGC API key
 export NGC_API_KEY="your_key_here"
 ```
+
+**Note:** PNG export requires kaleido, which can be difficult to install on some HPC systems. If you skip `[plots]`, the benchmark will still work but will only generate HTML plots (not PNG).
 
 ### Running on Colossus
 

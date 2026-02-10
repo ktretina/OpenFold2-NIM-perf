@@ -71,8 +71,16 @@ def load_multiple_results(run_dirs: list[Path]) -> pd.DataFrame:
         try:
             manifest, df = load_results(run_dir)
             all_dfs.append(df)
+        except FileNotFoundError as e:
+            logger.warning(f"Results not found in {run_dir}: {e}")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON in {run_dir}: {e}")
+        except PermissionError as e:
+            logger.warning(f"Permission denied reading {run_dir}: {e}")
         except Exception as e:
-            logger.warning(f"Failed to load results from {run_dir}: {e}")
+            # Re-raise unexpected errors instead of silently continuing
+            logger.error(f"Unexpected error loading results from {run_dir}: {e}")
+            raise
 
     if not all_dfs:
         raise ValueError("No results loaded from any directory")

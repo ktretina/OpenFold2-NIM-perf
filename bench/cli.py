@@ -66,10 +66,20 @@ def preflight(verbose: bool = typer.Option(False, "--verbose", "-v")):
     except Exception as e:
         checks.append(("docker", False, str(e)))
 
-    # Check NGC_API_KEY
+    # Check NGC_API_KEY (Fix #13: Enhanced validation)
     ngc_key = os.environ.get("NGC_API_KEY")
     if ngc_key:
-        checks.append(("NGC_API_KEY", True, "Set"))
+        # Check if it's exported (not just set)
+        try:
+            result = subprocess.run(
+                ["env"], capture_output=True, text=True, timeout=5
+            )
+            if "NGC_API_KEY=" in result.stdout:
+                checks.append(("NGC_API_KEY", True, "Set and exported"))
+            else:
+                checks.append(("NGC_API_KEY", False, "Set but not exported (use 'export NGC_API_KEY=...')"))
+        except Exception:
+            checks.append(("NGC_API_KEY", True, "Set (export status unknown)"))
     else:
         checks.append(("NGC_API_KEY", False, "Not set (required for NIM)"))
 
@@ -81,6 +91,39 @@ def preflight(verbose: bool = typer.Option(False, "--verbose", "-v")):
         checks.append(("Disk space", True, f"{free_gb:.1f} GB available"))
     else:
         checks.append(("Disk space", False, f"Only {free_gb:.1f} GB available (need 100+ GB)"))
+
+    # Check Python version (Fix #13: Minimum version check)
+    py_version = sys.version_info
+    if py_version >= (3, 10):
+        checks.append(("Python version", True, f"{py_version.major}.{py_version.minor}.{py_version.micro}"))
+    else:
+        checks.append(("Python version", False, f"{py_version.major}.{py_version.minor}.{py_version.micro} (need 3.10+)"))
+
+    # Check Docker daemon (Fix #13: Enhanced Docker check)
+    try:
+        result = subprocess.run(
+            ["docker", "ps"], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            checks.append(("Docker daemon", True, "Running and accessible"))
+        else:
+            checks.append(("Docker daemon", False, "Not accessible or permission denied"))
+    except Exception as e:
+        checks.append(("Docker daemon", False, str(e)))
+
+    # Check GPU visibility (Fix #13: nvidia-smi GPU check)
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            gpu_info = result.stdout.strip().split('\n')[0]
+            checks.append(("GPU visibility", True, gpu_info))
+        else:
+            checks.append(("GPU visibility", False, "No GPUs detected"))
+    except Exception as e:
+        checks.append(("GPU visibility", False, str(e)))
 
     # Display results
     table = Table(title="Preflight Results")

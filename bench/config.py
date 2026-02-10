@@ -67,20 +67,54 @@ class BenchmarkConfig(BaseModel):
             data["nim"]["cache_dir"] = self._expand_path(data["nim"]["cache_dir"])
         if "openfold" in data and "repo_path" in data["openfold"]:
             data["openfold"]["repo_path"] = self._expand_path(data["openfold"]["repo_path"])
+        if "output_dir" in data:
+            data["output_dir"] = self._expand_path(data["output_dir"])
+
+        # Expand targets_file paths in suites (Fix #1: relative path resolution)
+        if "suites" in data:
+            for suite in data["suites"]:
+                if "targets_file" in suite and suite["targets_file"] is not None:
+                    suite["targets_file"] = self._expand_path(suite["targets_file"])
+
         super().__init__(**data)
 
     @staticmethod
     def _expand_path(path_str: str) -> Path:
         """Expand environment variables and resolve path."""
         import os
+        import re
 
-        expanded = os.path.expandvars(str(path_str))
-        return Path(expanded).expanduser()
+        # Handle bash-style ${VAR:-default} syntax
+        def expand_with_default(match):
+            var_name = match.group(1)
+            default_value = match.group(2)
+            return os.environ.get(var_name, default_value)
+
+        # Replace ${VAR:-default} with actual value
+        expanded = re.sub(r'\$\{([^:}]+):-([^}]+)\}', expand_with_default, str(path_str))
+
+        # Standard environment variable expansion
+        expanded = os.path.expandvars(expanded)
+        expanded_path = Path(expanded).expanduser()
+
+        # If path is relative and not absolute, resolve relative to package directory
+        if not expanded_path.is_absolute():
+            # Get package root directory (parent of bench/)
+            package_root = Path(__file__).parent.parent
+            expanded_path = (package_root / expanded_path).resolve()
+
+        return expanded_path
 
 
 def load_config(path: Path) -> BenchmarkConfig:
     """Load configuration from YAML file."""
-    with open(path) as f:
+    config_path = Path(path)
+
+    # Validate config file exists (Fix #5)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
+    with open(config_path) as f:
         data = yaml.safe_load(f)
 
     # Generate run_id if not provided

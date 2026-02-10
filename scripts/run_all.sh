@@ -2,6 +2,14 @@
 set -e
 
 CONFIG=${1:-configs/default.yaml}
+
+# Fix #5: Validate config file exists
+if [ ! -f "$CONFIG" ]; then
+    echo "ERROR: Config file not found: $CONFIG"
+    echo "Usage: $0 [config_file]"
+    exit 1
+fi
+
 RUN_ID="run_$(date +%Y%m%d_%H%M%S)"
 
 echo "=== Running OpenFold2-NIM Benchmark ==="
@@ -27,9 +35,25 @@ bench analyze "results/$RUN_ID"
 echo "=== Benchmark Complete ==="
 echo "Results: results/$RUN_ID/analysis/report.html"
 
-# Copy to persistent storage if on Colossus
+# Fix #6: Improve persistent storage copy safety
 if [ -n "$PERSISTENT_VOLUME" ]; then
-    echo "Copying results to persistent storage..."
-    cp -r "results/$RUN_ID" "$PERSISTENT_VOLUME/openfold_results/"
-    echo "Persistent copy: $PERSISTENT_VOLUME/openfold_results/$RUN_ID"
+    PERSISTENT_DIR="$PERSISTENT_VOLUME/openfold_results"
+    echo "Copying results to persistent storage: $PERSISTENT_DIR"
+
+    # Create directory with validation
+    mkdir -p "$PERSISTENT_DIR" || {
+        echo "ERROR: Cannot create persistent directory: $PERSISTENT_DIR"
+        echo "Check permissions or PERSISTENT_VOLUME setting"
+        exit 1
+    }
+
+    # Copy results with validation
+    if ! cp -r "results/$RUN_ID" "$PERSISTENT_DIR/"; then
+        echo "ERROR: Failed to copy results to persistent storage"
+        echo "Source: results/$RUN_ID"
+        echo "Destination: $PERSISTENT_DIR/"
+        exit 1
+    fi
+
+    echo "✓ Persistent copy successful: $PERSISTENT_DIR/$RUN_ID"
 fi
