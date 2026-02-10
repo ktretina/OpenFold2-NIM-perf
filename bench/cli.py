@@ -212,6 +212,8 @@ def run(
 def analyze(
     input_dir: Path = typer.Argument(..., help="Results directory to analyze"),
     output_dir: Optional[Path] = typer.Option(None, "--output", "-o"),
+    export_csv: bool = typer.Option(True, "--csv/--no-csv", help="Export CSV data"),
+    update_readme: bool = typer.Option(False, "--update-readme", help="Update README with results"),
 ):
     """Generate analysis and plots from results."""
     from bench.analysis.report import generate_html_report
@@ -224,11 +226,31 @@ def analyze(
     console.print(f"[bold]Analyzing results from {input_dir}[/bold]")
 
     try:
-        # Generate report
+        # Generate report (includes CSV export by default via generate_html_report)
         report_path = generate_html_report(input_dir, output_dir)
 
         console.print(f"\n[green]✓ Analysis complete![/green]")
         console.print(f"[green]  Report: {report_path}[/green]")
+
+        # Note about CSV export
+        if export_csv:
+            csv_dir = output_dir / "data"
+            console.print(f"[green]  CSV Data: {csv_dir}[/green]")
+
+        # Update README if requested
+        if update_readme:
+            from bench.analysis.load import load_results
+            from bench.analysis.markdown import (
+                generate_results_markdown,
+                update_readme_with_results,
+            )
+
+            manifest, df = load_results(input_dir)
+            results_md = generate_results_markdown(manifest, df)
+            readme_path = Path("README.md")
+            update_readme_with_results(readme_path, results_md)
+            console.print("[green]✓ README updated with latest results[/green]")
+
         console.print(f"\n[cyan]Open in browser:[/cyan] file://{report_path.absolute()}")
 
     except Exception as e:

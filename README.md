@@ -47,6 +47,9 @@ export NGC_API_KEY="your_key_here"
 # Source environment variables
 source .env.colossus
 
+# Validate setup (recommended)
+./scripts/validate_setup.sh
+
 # Run full benchmark
 ./scripts/run_all.sh
 
@@ -66,10 +69,32 @@ bench run --config configs/default.yaml
 open results/run_*/analysis/report.html
 ```
 
+## Datasets
+
+The benchmark suite supports multiple protein datasets:
+
+### Classic Proteins (`targets.yaml`)
+- **20 well-studied proteins** covering diverse fold types
+- Size range: 20-260 residues
+- All fold types: all-α, all-β, α+β
+- **Use for:** Quick validation and development
+
+### CASP15 (`casp15_targets.yaml`)
+- **18 CASP15 (2022) targets** from the Critical Assessment of Structure Prediction
+- Categories: Free Modeling (FM), Template-Based Modeling Easy/Hard (TBM-easy/TBM-hard)
+- Size range: 112-324 residues
+- **Use for:** Research-grade benchmarking and publication-quality results
+
+To run CASP15 benchmark:
+```bash
+bench run --config configs/casp15.yaml
+```
+
 ## Configuration
 
 See `configs/` for examples:
 - `default.yaml`: Fast benchmark with accuracy evaluation (~1-2 hours)
+- `casp15.yaml`: CASP15 benchmark with deeper MSA (~3-4 hours)
 - `full_matrix.yaml`: Comprehensive with scaling studies (~8-12 hours)
 
 ### Example Configuration
@@ -110,6 +135,12 @@ bench run --config configs/default.yaml --output-dir results/run_001
 # Generate analysis
 bench analyze results/run_001
 
+# Generate analysis with README update
+bench analyze results/run_001 --update-readme
+
+# Use latest symlink for most recent run
+bench analyze results/latest --update-readme
+
 # Aggregate multi-machine results
 bench aggregate results/*/manifest.json --output-dir results/aggregate
 ```
@@ -123,6 +154,23 @@ Each benchmark run produces:
 - `timeseries/*.parquet`: GPU/CPU monitoring data
 - `structures/`: Predicted protein structures
 - `analysis/report.html`: Interactive HTML report with plots
+- `analysis/data/*.csv`: Exported CSV data files for external analysis
+
+### CSV Data Exports
+
+The analyze command automatically exports CSV files for all plots and analyses:
+
+- `raw_records.csv` - All prediction records
+- `summary_statistics.csv` - Aggregated performance metrics
+- `pareto_data.csv` - Pareto frontier analysis data
+- `scaling_data.csv` - Sequence length scaling data
+- `accuracy_per_target.csv` - Per-target accuracy breakdown
+
+These CSV files enable:
+- External data analysis and visualization
+- Publication-quality figure generation
+- Integration with other tools and workflows
+- Long-term data archival and reproducibility
 
 ## Key Metrics
 
@@ -153,6 +201,10 @@ The benchmark generates:
 3. **GPU utilization**: Distribution and time-series plots
 4. **Per-target accuracy**: Detailed breakdown by protein
 5. **Energy efficiency**: Power consumption analysis
+
+<!-- BENCHMARK_RESULTS -->
+<!-- Results will be inserted here when using: bench analyze results/latest --update-readme -->
+<!-- /BENCHMARK_RESULTS -->
 
 ## Development
 

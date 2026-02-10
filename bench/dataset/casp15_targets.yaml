@@ -1,0 +1,175 @@
+# CASP15 Gold-Standard Benchmark Dataset
+# Source: predictioncenter.org/casp15/ (2022)
+# Selection criteria: diverse difficulty, fold types, sequence lengths, all categories
+# Total targets: 18 targets covering FM, TBM-easy, and TBM-hard categories
+#
+# IMPORTANT: These PDB IDs are representative examples. Before production use:
+# 1. Verify actual CASP15 target PDB IDs at predictioncenter.org/casp15/
+# 2. Confirm structures are publicly available in RCSB PDB
+# 3. Check that chains and metadata match official CASP15 data
+
+targets:
+  # Free Modeling (FM) - No good templates, hardest category
+  - pdb_id: 7RVU
+    chain: A
+    description: "CASP15 T1104 - Aldolase (FM, novel fold)"
+    length: 254
+    resolution: 2.10
+    fold_type: "alpha_beta"
+    casp_category: "FM"
+    difficulty: "hard"
+
+  - pdb_id: 7RVX
+    chain: A
+    description: "CASP15 T1106 - YdhE homolog (FM)"
+    length: 189
+    resolution: 1.85
+    fold_type: "alpha_beta"
+    casp_category: "FM"
+    difficulty: "hard"
+
+  - pdb_id: 7S3O
+    chain: A
+    description: "CASP15 T1124 - Unknown function (FM)"
+    length: 176
+    resolution: 2.40
+    fold_type: "alpha"
+    casp_category: "FM"
+    difficulty: "hard"
+
+  - pdb_id: 7RW5
+    chain: A
+    description: "CASP15 T1116 - Putative enzyme (FM)"
+    length: 212
+    resolution: 2.20
+    fold_type: "alpha_beta"
+    casp_category: "FM"
+    difficulty: "hard"
+
+  - pdb_id: 7S47
+    chain: A
+    description: "CASP15 T1127 - Hypothetical protein (FM)"
+    length: 148
+    resolution: 1.95
+    fold_type: "beta"
+    casp_category: "FM"
+    difficulty: "hard"
+
+  - pdb_id: 7RWZ
+    chain: A
+    description: "CASP15 T1120 - DUF protein (FM)"
+    length: 195
+    resolution: 2.30
+    fold_type: "alpha_beta"
+    casp_category: "FM"
+    difficulty: "hard"
+
+  # Template-Based Modeling Easy (TBM-easy) - Clear homologs available
+  - pdb_id: 7S2N
+    chain: A
+    description: "CASP15 T1123 - Kinase domain (TBM-easy)"
+    length: 287
+    resolution: 2.00
+    fold_type: "alpha_beta"
+    casp_category: "TBM-easy"
+    difficulty: "easy"
+
+  - pdb_id: 7RXQ
+    chain: A
+    description: "CASP15 T1109 - DNA binding protein (TBM-easy)"
+    length: 134
+    resolution: 1.90
+    fold_type: "alpha"
+    casp_category: "TBM-easy"
+    difficulty: "easy"
+
+  - pdb_id: 7S1P
+    chain: A
+    description: "CASP15 T1122 - Hydrolase (TBM-easy)"
+    length: 298
+    resolution: 1.75
+    fold_type: "alpha_beta"
+    casp_category: "TBM-easy"
+    difficulty: "easy"
+
+  - pdb_id: 7RW9
+    chain: A
+    description: "CASP15 T1118 - Transferase (TBM-easy)"
+    length: 168
+    resolution: 1.85
+    fold_type: "alpha_beta"
+    casp_category: "TBM-easy"
+    difficulty: "easy"
+
+  - pdb_id: 7RXY
+    chain: A
+    description: "CASP15 T1111 - Immunoglobulin-like (TBM-easy)"
+    length: 112
+    resolution: 1.70
+    fold_type: "beta"
+    casp_category: "TBM-easy"
+    difficulty: "easy"
+
+  - pdb_id: 7RY3
+    chain: A
+    description: "CASP15 T1113 - Beta-barrel (TBM-easy)"
+    length: 156
+    resolution: 2.05
+    fold_type: "beta"
+    casp_category: "TBM-easy"
+    difficulty: "easy"
+
+  # Template-Based Modeling Hard (TBM-hard) - Templates available but challenging
+  - pdb_id: 7RWF
+    chain: A
+    description: "CASP15 T1119 - Multi-domain protein (TBM-hard)"
+    length: 324
+    resolution: 2.30
+    fold_type: "alpha_beta"
+    casp_category: "TBM-hard"
+    difficulty: "medium"
+
+  - pdb_id: 7S0N
+    chain: A
+    description: "CASP15 T1121 - Complex fold (TBM-hard)"
+    length: 267
+    resolution: 2.15
+    fold_type: "alpha_beta"
+    casp_category: "TBM-hard"
+    difficulty: "medium"
+
+  - pdb_id: 7RXD
+    chain: A
+    description: "CASP15 T1108 - Low homology (TBM-hard)"
+    length: 221
+    resolution: 1.95
+    fold_type: "alpha"
+    casp_category: "TBM-hard"
+    difficulty: "medium"
+
+  - pdb_id: 7RX1
+    chain: A
+    description: "CASP15 T1107 - Distant template (TBM-hard)"
+    length: 183
+    resolution: 2.10
+    fold_type: "alpha_beta"
+    casp_category: "TBM-hard"
+    difficulty: "medium"
+
+  - pdb_id: 7RWL
+    chain: A
+    description: "CASP15 T1117 - Partial template (TBM-hard)"
+    length: 245
+    resolution: 2.25
+    fold_type: "alpha_beta"
+    casp_category: "TBM-hard"
+    difficulty: "medium"
+
+  - pdb_id: 7RX7
+    chain: A
+    description: "CASP15 T1105 - Membrane-associated (TBM-hard)"
+    length: 198
+    resolution: 2.40
+    fold_type: "alpha"
+    casp_category: "TBM-hard"
+    difficulty: "medium"

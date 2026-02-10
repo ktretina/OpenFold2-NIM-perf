@@ -5,6 +5,7 @@ from typing import Optional
 
 import pandas as pd
 
+from bench.analysis.export import export_all_csvs
 from bench.analysis.load import load_results
 from bench.analysis.plots import generate_all_plots
 from bench.logging import logger
@@ -57,6 +58,30 @@ def generate_summary_table(df: pd.DataFrame) -> str:
     return summary.to_html(index=False, classes="summary-table", border=0)
 
 
+def create_latest_symlink(run_dir: Path):
+    """
+    Create results/latest symlink to most recent run.
+
+    Args:
+        run_dir: Directory of the current run
+    """
+    try:
+        results_dir = run_dir.parent
+        latest_link = results_dir / "latest"
+
+        # Remove existing symlink
+        if latest_link.exists() or latest_link.is_symlink():
+            latest_link.unlink()
+
+        # Create new symlink pointing to run directory
+        latest_link.symlink_to(run_dir.name, target_is_directory=True)
+        logger.info(f"Created symlink: {latest_link} -> {run_dir.name}")
+    except (OSError, NotImplementedError) as e:
+        # Symlinks may not be supported on some filesystems (e.g., some Windows or network drives)
+        logger.warning(f"Could not create latest symlink: {e}")
+        logger.info("This is not critical - you can access results directly via run directory")
+
+
 def generate_html_report(run_dir: Path, output_dir: Optional[Path] = None):
     """
     Generate comprehensive HTML report.
@@ -78,8 +103,15 @@ def generate_html_report(run_dir: Path, output_dir: Optional[Path] = None):
     # Load results
     manifest, df = load_results(run_dir)
 
+    # Export CSVs
+    csv_dir = output_dir / "data"
+    export_all_csvs(df, csv_dir)
+
     # Generate all plots
     generate_all_plots(df, plots_dir)
+
+    # Create latest symlink
+    create_latest_symlink(run_dir)
 
     # Build HTML
     html_content = f"""<!DOCTYPE html>

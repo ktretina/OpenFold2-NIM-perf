@@ -1,0 +1,47 @@
+# CASP15 benchmark configuration (~3-4 hours on single GPU)
+#
+# This configuration runs benchmarks on CASP15 (2022) targets, which provide
+# gold-standard evaluation from the Critical Assessment of Structure Prediction.
+#
+# Environment variables used:
+#   FAST_CACHE - Fast storage location (default: $HOME)
+#   RESULTS_DIR - Output directory (default: results)
+#   NGC_API_KEY - NVIDIA NGC API key (required for NIM)
+
+output_dir: ${RESULTS_DIR:-results}
+run_id: null  # Auto-generated if null
+
+gpu:
+  device_ids: [0]
+  sampling_interval_ms: 50
+
+nim:
+  enabled: true
+  container_image: "nvcr.io/nim/openfold/openfold2:latest"
+  # cache_dir: Fast storage for NIM model cache (~50GB)
+  cache_dir: "${FAST_CACHE:-$HOME}/nim_cache"
+  port: 8000
+  base_url: null  # Start local container (set to http://host:port to use existing NIM)
+  backend: "tensorrt"  # Options: tensorrt (fast), torch (slower)
+  model_sets:
+    - [3]              # Fast: single model
+    - [1, 2, 3, 4, 5]  # Slow: ensemble (5x models)
+
+openfold:
+  enabled: true
+  # repo_path: Location to clone OpenFold repository
+  repo_path: "${FAST_CACHE:-$HOME}/openfold_repo"
+  commit_hash: "main"  # Git commit to checkout
+  model_presets:
+    - "model_3_ptm"  # Options: model_1, model_2, model_3, model_3_ptm, etc.
+  precision: "bf16"  # Options: bf16, fp32
+  use_deepspeed: false  # Enable DeepSpeed inference optimization
+
+suites:
+  # CASP15 accuracy evaluation suite
+  # 18 targets covering Free Modeling (FM), TBM-easy, and TBM-hard
+  - name: casp15_accuracy
+    targets_file: bench/dataset/casp15_targets.yaml  # Relative paths resolved from package root
+    msa_depth: 8  # Deeper MSA for challenging CASP15 targets
+    repeats: 3  # Number of repeated measurements
+    warmup_runs: 1  # Warm-up iterations
