@@ -275,6 +275,105 @@ def aggregate(
     console.print(f"[green]Aggregation complete: {output_dir}[/green]")
 
 
+# Colossus commands
+colossus_app = typer.Typer(help="Colossus production features")
+app.add_typer(colossus_app, name="colossus")
+
+
+@colossus_app.command("detect")
+def colossus_detect():
+    """Detect hardware and print recommendations."""
+    from bench.colossus.hardware_detect import detect_hardware
+    from bench.colossus.auto_config import print_hardware_summary
+
+    console.print("[bold]Detecting hardware...[/bold]")
+    hw_profile = detect_hardware()
+    print_hardware_summary(hw_profile)
+
+
+@colossus_app.command("auto-config")
+def colossus_auto_config(
+    base_config: Path = typer.Option("configs/default.yaml", "--base-config", "-b"),
+    output_dir: Path = typer.Option("configs/generated", "--output-dir", "-o"),
+):
+    """Generate optimized config based on detected hardware."""
+    from bench.colossus.auto_config import generate_config
+
+    console.print(f"[bold]Generating config from {base_config}[/bold]")
+
+    generated_path = generate_config(base_config, output_dir)
+
+    console.print(f"\n[green]✓ Config generated: {generated_path}[/green]")
+    console.print(f"[cyan]Run benchmark:[/cyan] bench run --config {generated_path}")
+
+
+@colossus_app.command("campaign-create")
+def colossus_campaign_create(
+    campaign_dir: Path = typer.Argument(..., help="Campaign directory"),
+    name: str = typer.Option("GPU Comparison", "--name", "-n"),
+):
+    """Create a new campaign for multi-GPU studies."""
+    from bench.colossus.campaign import Campaign
+
+    console.print(f"[bold]Creating campaign: {name}[/bold]")
+
+    campaign = Campaign(campaign_dir, name)
+
+    console.print(f"\n[green]✓ Campaign created: {campaign_dir}[/green]")
+    console.print(f"[cyan]Add runs:[/cyan] bench colossus campaign-add --campaign-dir {campaign_dir} --run-dir <path>")
+
+
+@colossus_app.command("campaign-add")
+def colossus_campaign_add(
+    campaign_dir: Path = typer.Option(..., "--campaign-dir", "-c"),
+    run_dir: Path = typer.Option(..., "--run-dir", "-r"),
+):
+    """Add a run to an existing campaign."""
+    from bench.colossus.campaign import Campaign
+
+    console.print(f"[bold]Adding run to campaign[/bold]")
+
+    # Load campaign (uses existing manifest)
+    campaign = Campaign(campaign_dir, "")  # Name loaded from manifest
+
+    # Register run
+    campaign.register_run(run_dir)
+
+    console.print(f"\n[green]✓ Run added to campaign[/green]")
+
+
+@colossus_app.command("campaign-aggregate")
+def colossus_campaign_aggregate(
+    campaign_dir: Path = typer.Argument(..., help="Campaign directory"),
+):
+    """Aggregate all runs in a campaign."""
+    from bench.colossus.campaign import Campaign
+
+    console.print(f"[bold]Aggregating campaign results[/bold]")
+
+    campaign = Campaign(campaign_dir, "")
+    df = campaign.aggregate_results()
+
+    console.print(f"\n[green]✓ Aggregated {len(df)} records from {len(campaign.list_runs())} runs[/green]")
+    console.print(f"[green]  Data: {campaign_dir}/aggregated.parquet[/green]")
+
+
+@colossus_app.command("campaign-report")
+def colossus_campaign_report(
+    campaign_dir: Path = typer.Argument(..., help="Campaign directory"),
+):
+    """Generate comparison report for campaign."""
+    from bench.colossus.campaign import Campaign
+
+    console.print(f"[bold]Generating campaign report[/bold]")
+
+    campaign = Campaign(campaign_dir, "")
+    report_path = campaign.generate_comparison_report()
+
+    console.print(f"\n[green]✓ Report generated: {report_path}[/green]")
+    console.print(f"[cyan]Open in browser:[/cyan] file://{report_path.absolute()}")
+
+
 def main():
     """Entry point."""
     app()

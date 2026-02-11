@@ -49,21 +49,71 @@ export NGC_API_KEY="your_key_here"
 
 ### Running on Colossus
 
-```bash
-# Bootstrap Colossus environment
-./scripts/bootstrap_colossus.sh
+The benchmark suite includes production-ready Colossus integration with:
+- **One-click execution** - Single command runs entire workflow
+- **Hardware auto-detection** - Automatic GPU/storage detection and optimization
+- **Resumable benchmarks** - Checkpoint and resume long-running jobs
+- **Campaign mode** - Aggregate results across GPU types
 
-# Source environment variables
+#### Quick Start (One-Click)
+
+```bash
+# One command to bootstrap, configure, and run
+./scripts/colossus/run.sh configs/default.yaml
+```
+
+This automatically:
+1. Bootstraps environment (first time only)
+2. Detects hardware (GPU type, VRAM, fast storage)
+3. Generates optimized config
+4. Validates prerequisites
+5. Runs benchmark with checkpointing
+
+#### Manual Workflow
+
+```bash
+# 1. Bootstrap (first time only)
+./scripts/colossus/bootstrap.sh
 source .env.colossus
 
-# Validate setup (recommended)
-./scripts/validate_setup.sh
+# 2. Detect hardware and generate config
+bench colossus detect
+bench colossus auto-config --base-config configs/default.yaml
 
-# Run full benchmark
-./scripts/run_all.sh
+# 3. Validate environment
+bench preflight
 
-# Results will be at: results/run_*/analysis/report.html
+# 4. Run benchmark
+bench run --config configs/generated/auto_*.yaml
+
+# Results will be at: $PERSIST_DIR/results/run_*/
 ```
+
+#### Campaign Mode (Multi-GPU Studies)
+
+```bash
+# Create campaign for GPU comparison
+bench colossus campaign-create campaigns/gpu_comparison --name "H100 vs A100"
+
+# Run on H100
+bench run --config configs/auto_h100.yaml
+bench colossus campaign-add --campaign-dir campaigns/gpu_comparison \
+  --run-dir results/run_h100
+
+# Run on A100
+bench run --config configs/auto_a100.yaml
+bench colossus campaign-add --campaign-dir campaigns/gpu_comparison \
+  --run-dir results/run_a100
+
+# Aggregate and compare
+bench colossus campaign-aggregate campaigns/gpu_comparison
+bench colossus campaign-report campaigns/gpu_comparison
+
+# View report
+open campaigns/gpu_comparison/campaign_report.html
+```
+
+See [Colossus Runbook](docs/COLOSSUS_RUNBOOK.md) for detailed operations guide.
 
 ### Running Locally
 
