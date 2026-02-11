@@ -1,0 +1,103 @@
+# Comprehensive World-Class Benchmark Matrix
+#
+# This configuration runs a complete suite of publication-quality benchmarks:
+# 1. Accuracy benchmark (CASP targets with ground truth)
+# 2. MSA depth scaling (inference sensitivity)
+# 3. Sequence length scaling (computational complexity)
+#
+# Features:
+# - Precomputed MSAs for fair comparison
+# - Statistical rigor (warmup, sufficient samples, shuffling)
+# - All accuracy metrics (RMSD, lDDT, TM-score, GDT_TS)
+# - Distribution statistics (p90, p95, p99)
+# - Version pinning for reproducibility
+#
+# Expected runtime: Several hours depending on target count
+
+output_dir: ${RESULTS_DIR:-results}/world_class
+run_id: null
+
+gpu:
+  device_ids: [0]
+  sampling_interval_ms: 50
+
+nim:
+  enabled: true
+  container_image: "nvcr.io/nim/openfold/openfold2:1.0"
+  container_registry_digest: null  # TODO: Pin to specific digest for reproducibility
+  warn_on_latest_tag: true
+  cache_dir: "${FAST_CACHE:-$HOME}/nim_cache"
+  backend: "tensorrt"
+  model_sets:
+    - [3]                 # Single model
+    - [1, 2, 3, 4, 5]    # Full ensemble
+
+openfold:
+  enabled: true
+  repo_path: "${FAST_CACHE:-$HOME}/openfold_repo"
+  commit_hash: "main"  # TODO: Pin to specific commit for reproducibility
+  model_presets: ["model_3_ptm"]
+  precision: "bf16"
+  weights_source: "alphafold_official"  # Critical: match NIM's weights
+
+suites:
+  # Suite 1: Accuracy Benchmark (CASP15 targets with ground truth)
+  - name: accuracy_casp15_no_templates
+    targets_file: bench/dataset/casp15_targets.yaml
+    msa_depth: 128
+
+    # Use precomputed MSAs for fair comparison
+    inference_only_mode: true
+    precomputed_msa_dir: "data/precomputed/casp15_msa128"
+
+    # Statistical rigor
+    warmup_passes: 5
+    measurement_passes: 10
+    shuffle_targets_each_pass: true
+
+  # Suite 2: MSA Depth Scaling (inference sensitivity)
+  - name: msa_scaling
+    targets_file: bench/dataset/targets.yaml
+    msa_depths: [1, 32, 64, 128, 256]  # Varying MSA depths
+
+    warmup_passes: 3
+    measurement_passes: 10
+    shuffle_targets_each_pass: true
+
+  # Suite 3: Sequence Length Scaling (computational complexity)
+  - name: sequence_length_scaling
+    sequences:
+      - id: "len_100"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLE"
+      - id: "len_300"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLE"
+      - id: "len_600"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLE"
+      - id: "len_900"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLE"
+
+    msa_depth: 128
+    warmup_passes: 3
+    measurement_passes: 10
+    shuffle_targets_each_pass: true
+
+# Pre-run Checklist:
+# □ Generate precomputed MSAs for accuracy suite
+# □ Pin NIM container digest (set container_registry_digest above)
+# □ Pin OpenFold commit hash (set commit_hash above)
+# □ Ensure AlphaFold official weights are configured
+# □ Verify sufficient disk space for results
+#
+# Post-run Analysis:
+# □ Check p95/p99 tail latencies
+# □ Verify accuracy metrics (TM-score, GDT_TS) on CASP targets
+# □ Analyze MSA depth scaling curves
+# □ Examine sequence length complexity scaling
+# □ Generate distribution plots
+#
+# Publication Checklist:
+# □ Include all metadata (versions, digests, timestamps)
+# □ Report median and p95 latencies (not just mean)
+# □ Document hardware specs (GPU model, driver, CUDA version)
+# □ Include confidence intervals for accuracy metrics
+# □ Share configuration and precomputed MSAs for reproducibility

@@ -1,0 +1,58 @@
+# NIM Backend Comparison: TensorRT vs Torch
+#
+# This configuration compares NIM's two inference backends:
+# - TensorRT: Optimized, FP16 precision, requires compilation
+# - Torch: Baseline, BF16 precision, no compilation
+#
+# Expected results:
+# - TensorRT: 3-5x faster inference
+# - Torch: Slower but more flexible
+# - Accuracy: Identical (both use same AlphaFold weights)
+#
+# Usage:
+# 1. Run with backend: "tensorrt"
+# 2. Edit this file to set backend: "torch"
+# 3. Run again
+# 4. Compare results
+
+output_dir: ${RESULTS_DIR:-results}/nim_backends
+run_id: null
+
+gpu:
+  device_ids: [0]
+  sampling_interval_ms: 50
+
+nim:
+  enabled: true
+  container_image: "nvcr.io/nim/openfold/openfold2:1.0"
+  warn_on_latest_tag: true
+  cache_dir: "${FAST_CACHE:-$HOME}/nim_cache"
+
+  # *** CHANGE THIS BETWEEN RUNS ***
+  backend: "tensorrt"  # or "torch"
+
+  model_sets:
+    - [3]  # Single model for clean comparison
+
+openfold:
+  enabled: false  # Focus on NIM backend comparison only
+
+suites:
+  - name: backend_comparison
+    targets_file: bench/dataset/targets.yaml
+    msa_depth: 1  # Minimal MSA for fast iteration
+
+    warmup_passes: 3
+    measurement_passes: 10
+    shuffle_targets_each_pass: true
+
+# Analysis:
+# After running both backends, compare:
+#   bench analyze results/nim_backends/run_*_tensorrt
+#   bench analyze results/nim_backends/run_*_torch
+#
+# Key metrics to compare:
+# - wall_time_s (median, p95, p99)
+# - gpu_sm_util_avg_pct (TensorRT should be higher)
+# - gpu_energy_wh (energy efficiency)
+# - accuracy metrics (should be identical)

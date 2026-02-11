@@ -3,27 +3,40 @@
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 
 from bench.analysis.export import export_all_csvs
 from bench.analysis.load import load_results
 from bench.analysis.plots import generate_all_plots
+from bench.analysis.statistics import compute_distribution_stats
 from bench.logging import logger
 
 
 def generate_summary_table(df: pd.DataFrame) -> str:
-    """Generate HTML summary table."""
+    """Generate HTML summary table with distribution statistics."""
     # Aggregate by system and variant
     summary = (
         df.groupby(["system", "variant"])
         .agg(
             {
-                "wall_time_s": ["mean", "std", "min", "max"],
+                "wall_time_s": [
+                    "mean",
+                    "median",
+                    "std",
+                    "min",
+                    "max",
+                    ("p90", lambda x: np.percentile(x, 90)),
+                    ("p95", lambda x: np.percentile(x, 95)),
+                    ("p99", lambda x: np.percentile(x, 99)),
+                ],
                 "gpu_sm_util_avg_pct": "mean",
                 "gpu_mem_peak_mb": "mean",
                 "gpu_energy_wh": "mean",
                 "mean_plddt": "mean",
                 "ca_lddt": "mean",
+                "tm_score": "mean",
+                "gdt_ts": "mean",
                 "target_id": "count",
             }
         )
@@ -34,15 +47,21 @@ def generate_summary_table(df: pd.DataFrame) -> str:
     summary.columns = [
         "System",
         "Variant",
-        "Wall Time Mean (s)",
-        "Wall Time Std (s)",
-        "Wall Time Min (s)",
-        "Wall Time Max (s)",
+        "Time Mean (s)",
+        "Time Median (s)",
+        "Time Std (s)",
+        "Time Min (s)",
+        "Time Max (s)",
+        "Time p90 (s)",
+        "Time p95 (s)",
+        "Time p99 (s)",
         "Avg GPU Util (%)",
         "Peak GPU Mem (MB)",
         "Energy (Wh)",
         "Mean pLDDT",
         "Mean lDDT",
+        "Mean TM-score",
+        "Mean GDT_TS",
         "N Predictions",
     ]
 
@@ -51,11 +70,56 @@ def generate_summary_table(df: pd.DataFrame) -> str:
         if "Time" in col or "Util" in col or "Mem" in col or "Energy" in col:
             if summary[col].dtype in [float, int]:
                 summary[col] = summary[col].round(2)
-        elif "LDDT" in col or "pLDDT" in col:
+        elif "LDDT" in col or "pLDDT" in col or "TM-score" in col:
             if summary[col].dtype in [float, int]:
                 summary[col] = summary[col].round(3)
+        elif "GDT_TS" in col:
+            if summary[col].dtype in [float, int]:
+                summary[col] = summary[col].round(1)
 
     return summary.to_html(index=False, classes="summary-table", border=0)
+
+
+def generate_distribution_insights(df: pd.DataFrame) -> str:
+    """Generate insights about latency distribution."""
+    insights_html = []
+
+    # Compute distribution stats
+    stats = compute_distribution_stats(df, "wall_time_s", ["system", "variant"])
+
+    # Add insights for each variant
+    for _, row in stats.iterrows():
+        system = row["system"]
+        variant = row["variant"]
+        median = row["median"]
+        p95 = row["p95"]
+        p99 = row["p99"]
+        count = row["count"]
+
+        # Calculate tail latency ratio
+        tail_ratio = (p99 / median - 1) * 100 if median > 0 else 0
+
+        # Determine stability
+        if tail_ratio < 10:
+            stability = "🟢 Excellent - very stable"
+        elif tail_ratio < 20:
+            stability = "🟡 Good - minor variance"
+        elif tail_ratio < 50:
+            stability = "🟠 Moderate - some outliers"
+        else:
+            stability = "🔴 High variance - investigate outliers"
+
+        insights_html.append(f"""
+        <div class="info-box">
+            <h3>{system.upper()} - {variant}</h3>
+            <p><strong>Median:</strong> {median:.2f}s | <strong>p95:</strong> {p95:.2f}s | <strong>p99:</strong> {p99:.2f}s</p>
+            <p><strong>Tail Latency:</strong> p99 is {tail_ratio:.1f}% higher than median</p>
+            <p><strong>Stability:</strong> {stability}</p>
+            <p><strong>Sample Size:</strong> {int(count)} measurements</p>
+        </div>
+        """)
+
+    return '<div class="info-grid">' + ''.join(insights_html) + '</div>'
 
 
 def create_latest_symlink(run_dir: Path):
@@ -247,6 +311,29 @@ def generate_html_report(run_dir: Path, output_dir: Optional[Path] = None):
         <div class="section">
             <h2>Performance Summary</h2>
             {generate_summary_table(df)}
+        </div>
+
+        <div class="section">
+            <h2>Latency Distribution Analysis</h2>
+            <p>Statistical distribution of latencies showing median, p95, and p99 percentiles.
+            Tail latencies (p95/p99) are critical for production SLA definition.</p>
+            {generate_distribution_insights(df)}
+
+            <h3>Violin Plot: Full Distribution</h3>
+            <div class="plot-container">
+                <iframe src="plots/latency_distribution_violin.html" height="750px"></iframe>
+            </div>
+
+            <h3>Percentile Comparison</h3>
+            <div class="plot-container">
+                <iframe src="plots/percentile_comparison.html" height="650px"></iframe>
+            </div>
+
+            <h3>Tail Latency Analysis</h3>
+            <p>This shows p99/median ratio - values closer to 100% indicate more stable performance.</p>
+            <div class="plot-container">
+                <iframe src="plots/tail_latency_analysis.html" height="650px"></iframe>
+            </div>
         </div>
 
         <div class="section">

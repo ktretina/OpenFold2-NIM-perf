@@ -220,6 +220,48 @@ def export_summary_statistics(df: pd.DataFrame, output_dir: Path):
     logger.info(f"Exported summary statistics to {csv_path}")
 
 
+def export_distribution_statistics(df: pd.DataFrame, output_dir: Path):
+    """
+    Export distribution statistics with percentiles.
+
+    Exports p50, p90, p95, p99 for all metrics grouped by system/variant.
+
+    Args:
+        df: Results DataFrame
+        output_dir: Directory to save CSV files
+    """
+    from bench.analysis.statistics import compute_distribution_stats
+
+    # Latency distribution
+    latency_stats = compute_distribution_stats(df, "wall_time_s", ["system", "variant"])
+    csv_path = output_dir / "latency_distributions.csv"
+    latency_stats.to_csv(csv_path, index=False)
+    logger.info(f"Exported latency distributions to {csv_path}")
+
+    # GPU utilization distribution (if available)
+    if "gpu_sm_util_avg_pct" in df.columns:
+        gpu_stats = compute_distribution_stats(df, "gpu_sm_util_avg_pct", ["system", "variant"])
+        csv_path = output_dir / "gpu_util_distributions.csv"
+        gpu_stats.to_csv(csv_path, index=False)
+        logger.info(f"Exported GPU utilization distributions to {csv_path}")
+
+    # Energy distribution (if available)
+    if "gpu_energy_wh" in df.columns:
+        energy_stats = compute_distribution_stats(df, "gpu_energy_wh", ["system", "variant"])
+        csv_path = output_dir / "energy_distributions.csv"
+        energy_stats.to_csv(csv_path, index=False)
+        logger.info(f"Exported energy distributions to {csv_path}")
+
+    # Accuracy distribution (if available)
+    if "ca_lddt" in df.columns:
+        accuracy_df = df.dropna(subset=["ca_lddt"])
+        if not accuracy_df.empty:
+            accuracy_stats = compute_distribution_stats(accuracy_df, "ca_lddt", ["system", "variant"])
+            csv_path = output_dir / "accuracy_distributions.csv"
+            accuracy_stats.to_csv(csv_path, index=False)
+            logger.info(f"Exported accuracy distributions to {csv_path}")
+
+
 def export_all_csvs(df: pd.DataFrame, output_dir: Path):
     """
     Export all CSV files.
@@ -237,5 +279,6 @@ def export_all_csvs(df: pd.DataFrame, output_dir: Path):
     export_scaling_data(df, output_dir)
     export_accuracy_data(df, output_dir)
     export_summary_statistics(df, output_dir)
+    export_distribution_statistics(df, output_dir)
 
     logger.info("CSV export complete")

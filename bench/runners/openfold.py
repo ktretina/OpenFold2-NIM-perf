@@ -3,7 +3,10 @@
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bench.results.schema import PrecomputedInputs
 
 from bench.config import OpenFoldConfig
 from bench.dataset.openfold_precomputed import create_openfold_alignment_dir
@@ -145,6 +148,7 @@ class OpenFoldRunner(RunnerBase):
         msa_depth: int,
         variant: str,
         models: list[int],
+        precomputed_inputs: Optional["PrecomputedInputs"] = None,
     ) -> PredictionResult:
         """
         Run OpenFold inference.
@@ -155,6 +159,7 @@ class OpenFoldRunner(RunnerBase):
             msa_depth: MSA depth for synthetic MSA generation
             variant: Variant identifier
             models: Model indices to use (currently ignored, controlled by preset)
+            precomputed_inputs: Optional precomputed MSA inputs
 
         Returns:
             PredictionResult with metrics
@@ -165,15 +170,21 @@ class OpenFoldRunner(RunnerBase):
         fasta_file = fasta_dir / f"{target_id}.fasta"
         fasta_file.write_text(f">{target_id}\n{sequence}\n")
 
-        # Prepare precomputed alignments directory
-        alignment_parent = self.workdir / "alignments"
-        alignment_parent.mkdir(exist_ok=True)
-        alignment_dir = alignment_parent / target_id
+        # Use precomputed alignments if provided, otherwise generate synthetic
+        if precomputed_inputs:
+            logger.debug("Using precomputed alignments for %s (hash: %s...)",
+                       target_id, precomputed_inputs.msa_hash[:16])
+            alignment_dir = Path(precomputed_inputs.openfold_alignment_dir)
+        else:
+            # Prepare precomputed alignments directory
+            alignment_parent = self.workdir / "alignments"
+            alignment_parent.mkdir(exist_ok=True)
+            alignment_dir = alignment_parent / target_id
 
-        logger.debug(
-            "Creating precomputed alignments for %s (depth=%d)", target_id, msa_depth
-        )
-        create_openfold_alignment_dir(target_id, sequence, msa_depth, alignment_parent)
+            logger.debug(
+                "Creating synthetic alignments for %s (depth=%d)", target_id, msa_depth
+            )
+            create_openfold_alignment_dir(target_id, sequence, msa_depth, alignment_parent)
 
         # Prepare template directory (even if empty)
         template_dir = self.workdir / "templates"

@@ -25,6 +25,9 @@ class NIMConfig(BaseModel):
     base_url: Optional[str] = None  # If None, start local container
     backend: Literal["tensorrt", "torch"] = "tensorrt"
     model_sets: list[list[int]] = Field(default_factory=lambda: [[3], [1, 2, 3, 4, 5]])
+    restart_between_runs: bool = False  # For cold-start measurements
+    container_registry_digest: Optional[str] = None  # Pin to specific digest
+    warn_on_latest_tag: bool = True  # Warn if using :latest
 
 
 class OpenFoldConfig(BaseModel):
@@ -36,6 +39,8 @@ class OpenFoldConfig(BaseModel):
     model_presets: list[str] = Field(default_factory=lambda: ["model_3_ptm"])
     precision: Literal["fp32", "bf16"] = "bf16"
     use_deepspeed: bool = False
+    weights_source: Literal["openfold", "alphafold_official"] = "openfold"
+    weights_path: Optional[Path] = None  # Custom weights directory
 
 
 class BenchmarkSuite(BaseModel):
@@ -46,8 +51,20 @@ class BenchmarkSuite(BaseModel):
     sequences: Optional[list[dict]] = None  # Synthetic sequences
     msa_depth: int = 1
     msa_depths: Optional[list[int]] = None  # For MSA scaling studies
-    repeats: int = 3
-    warmup_runs: int = 1
+
+    # Warmup/measurement control
+    warmup_passes: int = 1  # Number of warmup iterations
+    measurement_passes: int = 3  # Number of measurement iterations
+    shuffle_targets_each_pass: bool = False  # Randomize target order per pass
+
+    # Advanced modes
+    suite_type: Literal["standard", "cold_start"] = "standard"
+    precomputed_msa_dir: Optional[Path] = None  # Path to precomputed MSA storage
+    inference_only_mode: bool = False  # Skip MSA generation, use precomputed only
+
+    # Backward compatibility
+    repeats: int = 3  # DEPRECATED: Use measurement_passes instead
+    warmup_runs: int = 1  # DEPRECATED: Use warmup_passes instead
 
 
 class BenchmarkConfig(BaseModel):
@@ -70,11 +87,19 @@ class BenchmarkConfig(BaseModel):
         if "output_dir" in data:
             data["output_dir"] = self._expand_path(data["output_dir"])
 
-        # Expand targets_file paths in suites (Fix #1: relative path resolution)
+        # Expand targets_file and precomputed_msa_dir paths in suites
         if "suites" in data:
             for suite in data["suites"]:
                 if "targets_file" in suite and suite["targets_file"] is not None:
                     suite["targets_file"] = self._expand_path(suite["targets_file"])
+                if "precomputed_msa_dir" in suite and suite["precomputed_msa_dir"] is not None:
+                    suite["precomputed_msa_dir"] = self._expand_path(suite["precomputed_msa_dir"])
+
+                # Backward compatibility: map old field names to new ones
+                if "repeats" in suite and "measurement_passes" not in suite:
+                    suite["measurement_passes"] = suite["repeats"]
+                if "warmup_runs" in suite and "warmup_passes" not in suite:
+                    suite["warmup_passes"] = suite["warmup_runs"]
 
         super().__init__(**data)
 

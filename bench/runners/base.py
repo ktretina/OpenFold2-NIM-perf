@@ -3,7 +3,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bench.results.schema import PrecomputedInputs
 
 
 @dataclass
@@ -46,6 +49,7 @@ class RunnerBase(ABC):
         msa_depth: int,
         variant: str,
         models: list[int],
+        precomputed_inputs: Optional["PrecomputedInputs"] = None,
     ) -> PredictionResult:
         """
         Run inference and return structured result.
@@ -56,6 +60,7 @@ class RunnerBase(ABC):
             msa_depth: MSA depth for synthetic MSA generation
             variant: Variant identifier
             models: Model indices to use
+            precomputed_inputs: Optional precomputed MSA/template inputs
 
         Returns:
             PredictionResult with metrics and paths

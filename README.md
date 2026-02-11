@@ -1,14 +1,23 @@
 # OpenFold2-NIM Performance Benchmark
 
-Production-ready benchmarking suite comparing NVIDIA OpenFold2 NIM microservice against open-source OpenFold.
+World-class benchmarking suite for comparing NVIDIA OpenFold2 NIM microservice against open-source OpenFold with publication-quality statistical rigor.
 
 ## Features
 
+### Core Capabilities
 - **Out-of-the-box execution**: Clone → bootstrap → run benchmarks → view HTML report
-- **Comprehensive metrics**: Latency, GPU utilization, memory, energy, accuracy (RMSD, lDDT)
+- **Comprehensive metrics**: Latency, GPU utilization, memory, energy, accuracy
 - **Pareto frontier analysis**: Find optimal accuracy/performance trade-offs
 - **Multi-GPU support**: Run on A100, H100, or other GPUs
 - **Colossus-optimized**: Scripts and docs for NVIDIA Colossus infrastructure
+
+### NEW: World-Class Benchmarking Features
+- **CASP-standard accuracy metrics**: TM-score, GDT_TS in addition to RMSD/lDDT
+- **Statistical rigor**: Proper warmup/measurement separation, p90/p95/p99 percentiles
+- **Apples-to-apples comparison**: Precomputed MSAs ensure identical inputs for both systems
+- **Cold-start measurements**: Quantify container startup and initialization overhead
+- **Version tracking**: Automatic warnings for `:latest` tags, digest capture for reproducibility
+- **Tail latency analysis**: Identify performance variance with percentile tracking
 
 ## Quick Start
 
@@ -92,10 +101,19 @@ bench run --config configs/casp15.yaml
 
 ## Configuration
 
-See `configs/` for examples:
+### Available Benchmark Configurations
+
+**Standard Benchmarks:**
 - `default.yaml`: Fast benchmark with accuracy evaluation (~1-2 hours)
 - `casp15.yaml`: CASP15 benchmark with deeper MSA (~3-4 hours)
 - `full_matrix.yaml`: Comprehensive with scaling studies (~8-12 hours)
+
+**World-Class Benchmarks (NEW):**
+- `inference_only_benchmark.yaml`: Apples-to-apples with precomputed MSAs
+- `statistical_rigor.yaml`: 20 measurement passes for reliable percentiles
+- `nim_backend_comparison.yaml`: TensorRT vs Torch comparison
+- `cold_start.yaml`: Container initialization overhead measurements
+- `world_class_benchmark.yaml`: Comprehensive publication-quality suite
 
 ### Example Configuration
 
@@ -118,6 +136,124 @@ suites:
     targets_file: bench/dataset/targets.yaml
     msa_depth: 1
     repeats: 3
+```
+
+## Advanced Benchmark Modes
+
+### Inference-Only Benchmark (Apples-to-Apples)
+
+For fair comparison, use precomputed MSAs to ensure identical inputs:
+
+```bash
+# Step 1: Generate precomputed MSAs
+python scripts/precompute_msas.py \
+  --targets bench/dataset/casp15_targets.yaml \
+  --output data/precomputed/casp15_msa128 \
+  --msa-depth 128
+
+# Step 2: Run inference-only benchmark
+bench run --config configs/inference_only_benchmark.yaml
+```
+
+This eliminates MSA generation variance and measures pure inference performance.
+
+### Statistical Rigor Benchmark
+
+For publication-quality results with proper statistics:
+
+```bash
+bench run --config configs/statistical_rigor.yaml
+```
+
+Features:
+- 10 warmup passes (excluded from results)
+- 20 measurement passes (for reliable p95/p99 calculation)
+- Target shuffling between passes
+- Distribution statistics (median, p90, p95, p99)
+
+### Cold-Start Benchmark
+
+Measure container startup and initialization overhead:
+
+```bash
+bench run --config configs/cold_start.yaml
+```
+
+Measures:
+- Container startup time (stop → ready)
+- First request latency (cold)
+- Second request latency (warm)
+
+### NIM Backend Comparison
+
+Compare TensorRT vs Torch backends:
+
+```bash
+# Run TensorRT
+bench run --config configs/nim_backend_comparison.yaml
+
+# Edit config: set backend to "torch"
+# Run again
+bench run --config configs/nim_backend_comparison.yaml
+```
+
+## Best Practices
+
+### Version Pinning for Reproducibility
+
+**Don't use `:latest` tags in production!**
+
+```yaml
+# ❌ NOT RECOMMENDED
+nim:
+  container_image: "nvcr.io/nim/openfold/openfold2:latest"
+
+# ✅ RECOMMENDED - Pin to specific version
+nim:
+  container_image: "nvcr.io/nim/openfold/openfold2:1.0"
+
+# ✅ BEST - Pin to specific digest
+nim:
+  container_image: "nvcr.io/nim/openfold/openfold2@sha256:abc123..."
+```
+
+The benchmark automatically:
+- Warns when using `:latest` tags
+- Captures container digests in results
+- Tracks exact versions for reproducibility
+
+### Statistical Rigor
+
+For publication-quality benchmarks:
+
+1. **Use warmup passes** to eliminate cold-start effects
+   ```yaml
+   warmup_passes: 5-10  # Recommended
+   ```
+
+2. **Run sufficient measurements** for tail latency analysis
+   ```yaml
+   measurement_passes: 20  # Enables reliable p95/p99
+   ```
+
+3. **Enable target shuffling** to reduce order effects
+   ```yaml
+   shuffle_targets_each_pass: true
+   ```
+
+4. **Use precomputed MSAs** for inference-only comparison
+   ```yaml
+   precomputed_msa_dir: "data/precomputed/casp15_msa128"
+   inference_only_mode: true
+   ```
+
+### Model Parity
+
+Ensure fair comparison by using AlphaFold official weights:
+
+```yaml
+openfold:
+  weights_source: "alphafold_official"  # Match NIM's weights
 ```
 
 ## CLI Reference
@@ -182,8 +318,10 @@ These CSV files enable:
 - **Energy**: Power consumption (Wh)
 
 ### Accuracy
-- **Cα RMSD**: Coordinate accuracy after Kabsch alignment
-- **Cα lDDT**: Local distance difference test (0-1 scale)
+- **Cα RMSD**: Coordinate accuracy after Kabsch alignment (Ångströms)
+- **Cα lDDT**: Local distance difference test (0-100)
+- **TM-score**: Length-normalized structural similarity (0-1, >0.5 = same fold)
+- **GDT_TS**: CASP standard metric (0-100, measures % residues within distance thresholds)
 - **Mean pLDDT**: Model confidence (0-100)
 
 ## Documentation
@@ -195,12 +333,27 @@ These CSV files enable:
 
 ## Example Output
 
-The benchmark generates:
-1. **Pareto frontier plot**: Accuracy vs performance trade-offs
-2. **Scaling analysis**: Sequence length and MSA depth scaling
-3. **GPU utilization**: Distribution and time-series plots
-4. **Per-target accuracy**: Detailed breakdown by protein
-5. **Energy efficiency**: Power consumption analysis
+### Generated Reports & Visualizations
+
+The benchmark generates comprehensive HTML reports with interactive Plotly visualizations:
+
+**Performance Analysis:**
+1. **Latency distribution analysis**: Violin plots, percentile comparison (NEW)
+2. **Tail latency analysis**: p99/median ratios for stability assessment (NEW)
+3. **Pareto frontier plot**: Accuracy vs performance trade-offs
+4. **Scaling analysis**: Sequence length and MSA depth scaling
+5. **GPU utilization**: Distribution and time-series plots
+
+**Accuracy Analysis:**
+6. **Per-target accuracy**: RMSD, lDDT, TM-score, GDT_TS breakdown (NEW)
+7. **Energy efficiency**: Power consumption vs accuracy trade-offs
+
+**Data Exports:**
+- `raw_records.csv`: All prediction results
+- `latency_distributions.csv`: p50/p90/p95/p99 statistics (NEW)
+- `accuracy_distributions.csv`: Statistical distribution of accuracy metrics (NEW)
+- `summary_statistics.csv`: Aggregated performance summary
+- `cold_start_records.parquet`: Container initialization metrics (NEW)
 
 <!-- BENCHMARK_RESULTS -->
 <!-- Results will be inserted here when using: bench analyze results/latest --update-readme -->

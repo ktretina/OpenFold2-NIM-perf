@@ -4,9 +4,12 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import docker
+
+if TYPE_CHECKING:
+    from bench.results.schema import PrecomputedInputs
 import requests
 
 from bench.config import NIMConfig
@@ -92,6 +95,15 @@ class NIMRunner(RunnerBase):
         # Check NGC_API_KEY
         if "NGC_API_KEY" not in os.environ:
             raise RuntimeError("NGC_API_KEY environment variable not set")
+
+        # Warn if using :latest tag
+        if self.config.warn_on_latest_tag and self.config.container_image.endswith(":latest"):
+            logger.warning(
+                "⚠️  Using :latest tag for NIM container. For reproducible benchmarks, "
+                "pin to a specific version with digest hash. "
+                "Example: nvcr.io/nim/openfold/openfold2:1.0 or use digest: "
+                "nvcr.io/nim/openfold/openfold2@sha256:abc123..."
+            )
 
         # Prepare environment
         env = {
@@ -203,6 +215,7 @@ class NIMRunner(RunnerBase):
         msa_depth: int,
         variant: str,
         models: list[int],
+        precomputed_inputs: Optional["PrecomputedInputs"] = None,
     ) -> PredictionResult:
         """
         Run NIM inference.
@@ -213,16 +226,36 @@ class NIMRunner(RunnerBase):
             msa_depth: MSA depth for synthetic MSA generation
             variant: Variant identifier (for logging)
             models: Model indices to use (e.g., [3] or [1,2,3,4,5])
+            precomputed_inputs: Optional precomputed MSA inputs
 
         Returns:
             PredictionResult with metrics
         """
-        # Generate synthetic MSAs
-        logger.debug(
-            "Generating synthetic MSA for %s (depth=%d)", target_id, msa_depth
-        )
-        payload = create_nim_payload(target_id, sequence, msa_depth)
-        payload["selected_models"] = models
+        # Use precomputed MSA if provided, otherwise generate synthetic
+        if precomputed_inputs:
+            logger.debug("Using precomputed MSA for %s (hash: %s...)",
+                       target_id, precomputed_inputs.msa_hash[:16])
+            # Path in PrecomputedInputs is relative to manifest directory
+            # The orchestrator should have loaded it with the correct base path
+            # For now, we'll assume nim_a3m_path is already absolute or properly resolved
+            nim_a3m_path = Path(precomputed_inputs.nim_a3m_path)
+            msa_content = nim_a3m_path.read_text()
+
+            # Create payload with precomputed MSA
+            payload = {
+                "sequence": sequence,
+                "msa": {
+                    "format": "a3m",
+                    "content": msa_content
+                },
+                "selected_models": models,
+            }
+        else:
+            logger.debug(
+                "Generating synthetic MSA for %s (depth=%d)", target_id, msa_depth
+            )
+            payload = create_nim_payload(target_id, sequence, msa_depth)
+            payload["selected_models"] = models
 
         # Start monitoring
         nvml_sampler = NVMLSampler(self.gpu_ids, interval_ms=50)
@@ -356,6 +389,7 @@ class NIMRunner(RunnerBase):
         metadata = {
             "backend": self.config.backend,
             "container_image": self.config.container_image,
+            "using_latest_tag": self.config.container_image.endswith(":latest"),
         }
 
         # Try to fetch metadata endpoint
@@ -372,8 +406,18 @@ class NIMRunner(RunnerBase):
             try:
                 self.container.reload()
                 image = self.container.image
-                if hasattr(image, "attrs") and "RepoDigests" in image.attrs:
-                    metadata["container_digest"] = image.attrs["RepoDigests"][0]
+                if hasattr(image, "attrs"):
+                    # Get RepoDigests for registry digest
+                    if "RepoDigests" in image.attrs:
+                        digests = image.attrs["RepoDigests"]
+                        if digests:
+                            metadata["container_digest"] = digests[0]
+                            # Extract just the digest portion
+                            if "@sha256:" in digests[0]:
+                                metadata["container_registry_digest"] = digests[0].split("@")[1]
+                    # Also try to get image ID as fallback
+                    if "Id" in image.attrs and "container_digest" not in metadata:
+                        metadata["container_digest"] = image.attrs["Id"]
             except Exception as e:
                 logger.warning("Failed to get container digest: %s", e)
 

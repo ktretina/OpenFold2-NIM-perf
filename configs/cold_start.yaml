@@ -1,0 +1,61 @@
+# Cold-Start Benchmark for Microservice Overhead
+#
+# This benchmark measures NIM container startup and cold-start latency:
+# - Container startup time (stop to ready)
+# - First request latency (cold)
+# - Second request latency (warm)
+#
+# Use cases:
+# - Quantify initialization overhead
+# - Evaluate serverless deployment feasibility
+# - Measure model loading time
+#
+# Note: Only applicable to NIM (containerized microservice)
+
+output_dir: ${RESULTS_DIR:-results}/cold_start
+run_id: null
+
+gpu:
+  device_ids: [0]
+  sampling_interval_ms: 50
+
+nim:
+  enabled: true
+  container_image: "nvcr.io/nim/openfold/openfold2:1.0"
+  warn_on_latest_tag: true
+  cache_dir: "${FAST_CACHE:-$HOME}/nim_cache"
+  backend: "tensorrt"
+  restart_between_runs: true  # Enable container restart
+  model_sets:
+    - [3]
+
+openfold:
+  enabled: false  # Cold start only relevant for containerized services
+
+suites:
+  - name: cold_start_measurement
+    suite_type: "cold_start"  # Special suite type
+
+    # Small set of representative targets
+    sequences:
+      - id: "seq_100aa"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLE"
+      - id: "seq_300aa"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLE"
+      - id: "seq_500aa"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLEMKTAYIAKQRQISFVKSHFSRQLE"
+
+    msa_depth: 1  # Minimal MSA for fast iteration
+    measurement_passes: 10  # Number of cold starts to measure
+
+# Expected Results:
+# - Container startup: 10-60s (depends on cache state)
+#   - Warm cache (model weights cached): ~10-15s
+#   - Cold cache (first pull): ~30-60s
+# - First request (cold): Baseline + model loading (~5-10s overhead)
+# - Second request (warm): Baseline latency
+#
+# Analysis:
+# The difference between first and second request quantifies
+# model initialization overhead. Large differences indicate
+# expensive model loading that impacts serverless feasibility.

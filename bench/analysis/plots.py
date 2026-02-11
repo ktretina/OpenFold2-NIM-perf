@@ -448,6 +448,184 @@ def plot_energy_efficiency(df: pd.DataFrame, output_dir: Path):
     logger.info(f"Saved energy plot to {html_path}")
 
 
+def plot_latency_distribution_violin(df: pd.DataFrame, output_dir: Path):
+    """
+    Violin plots showing full latency distribution with percentiles.
+
+    Args:
+        df: Results DataFrame
+        output_dir: Directory to save plots
+    """
+    logger.info("Generating latency distribution violin plot...")
+
+    # Create violin plot
+    fig = go.Figure()
+
+    for system in df["system"].unique():
+        system_df = df[df["system"] == system]
+
+        for variant in system_df["variant"].unique():
+            variant_df = system_df[system_df["variant"] == variant]
+
+            fig.add_trace(go.Violin(
+                y=variant_df["wall_time_s"],
+                name=f"{system} - {variant}",
+                box_visible=True,
+                meanline_visible=True,
+                points="all",
+                pointpos=-0.5,
+                jitter=0.3,
+                marker=dict(
+                    color=COLORS.get(system, "#888"),
+                    opacity=0.6,
+                    size=3
+                ),
+                line_color=COLORS.get(system, "#888"),
+            ))
+
+    fig.update_layout(
+        title="Latency Distribution by Configuration",
+        xaxis_title="Configuration",
+        yaxis_title="Wall Time (seconds)",
+        height=700,
+        showlegend=True,
+        hovermode='closest',
+        template="plotly_white",
+    )
+
+    html_path = output_dir / "latency_distribution_violin.html"
+    fig.write_html(str(html_path))
+    logger.info(f"Saved violin plot to {html_path}")
+
+
+def plot_percentile_comparison(df: pd.DataFrame, output_dir: Path):
+    """
+    Bar chart comparing p50/p90/p95/p99 across variants.
+
+    Args:
+        df: Results DataFrame
+        output_dir: Directory to save plots
+    """
+    logger.info("Generating percentile comparison plot...")
+
+    from bench.analysis.statistics import compute_distribution_stats
+
+    stats = compute_distribution_stats(df, "wall_time_s", ["system", "variant"])
+
+    # Create grouped bar chart
+    fig = go.Figure()
+
+    percentiles = ["median", "p90", "p95", "p99"]
+    percentile_labels = ["Median (p50)", "p90", "p95", "p99"]
+
+    for i, (pct, label) in enumerate(zip(percentiles, percentile_labels)):
+        for system in stats["system"].unique():
+            system_stats = stats[stats["system"] == system]
+
+            fig.add_trace(go.Bar(
+                name=f"{system.upper()} - {label}",
+                x=system_stats["variant"],
+                y=system_stats[pct],
+                marker_color=COLORS.get(system, "#888"),
+                opacity=0.5 + (i * 0.15),  # Darker for higher percentiles
+                text=system_stats[pct].round(2),
+                textposition='auto',
+            ))
+
+    fig.update_layout(
+        title="Latency Percentiles Comparison",
+        xaxis_title="Configuration",
+        yaxis_title="Latency (seconds)",
+        height=600,
+        barmode="group",
+        template="plotly_white",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+    )
+
+    html_path = output_dir / "percentile_comparison.html"
+    fig.write_html(str(html_path))
+    logger.info(f"Saved percentile comparison to {html_path}")
+
+
+def plot_tail_latency_analysis(df: pd.DataFrame, output_dir: Path):
+    """
+    Analyze tail latency (p99/p50 ratio) to identify variance issues.
+
+    Args:
+        df: Results DataFrame
+        output_dir: Directory to save plots
+    """
+    logger.info("Generating tail latency analysis plot...")
+
+    from bench.analysis.statistics import compute_distribution_stats
+
+    stats = compute_distribution_stats(df, "wall_time_s", ["system", "variant"])
+
+    # Calculate tail latency ratio
+    stats["tail_ratio"] = (stats["p99"] / stats["median"]) * 100
+
+    fig = go.Figure()
+
+    for system in stats["system"].unique():
+        system_stats = stats[stats["system"] == system]
+
+        fig.add_trace(go.Bar(
+            name=system.upper(),
+            x=system_stats["variant"],
+            y=system_stats["tail_ratio"],
+            marker_color=COLORS.get(system, "#888"),
+            text=system_stats["tail_ratio"].round(1).astype(str) + "%",
+            textposition='auto',
+        ))
+
+    # Add reference line at 120% (20% variance is reasonable)
+    fig.add_hline(
+        y=120,
+        line_dash="dash",
+        line_color="red",
+        annotation_text="High variance threshold (20%)",
+        annotation_position="right"
+    )
+
+    fig.add_hline(
+        y=110,
+        line_dash="dash",
+        line_color="orange",
+        annotation_text="Good stability threshold (10%)",
+        annotation_position="right"
+    )
+
+    fig.update_layout(
+        title="Tail Latency Analysis (p99 vs Median)",
+        xaxis_title="Configuration",
+        yaxis_title="p99 / Median (%)",
+        height=600,
+        barmode="group",
+        template="plotly_white",
+        annotations=[
+            dict(
+                text="Lower is better - indicates more stable performance",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=-0.15,
+                showarrow=False,
+                font=dict(size=12, color="gray")
+            )
+        ]
+    )
+
+    html_path = output_dir / "tail_latency_analysis.html"
+    fig.write_html(str(html_path))
+    logger.info(f"Saved tail latency analysis to {html_path}")
+
+
 def generate_all_plots(df: pd.DataFrame, output_dir: Path):
     """
     Generate all plots.
@@ -464,5 +642,10 @@ def generate_all_plots(df: pd.DataFrame, output_dir: Path):
     plot_gpu_utilization_distribution(df, output_dir)
     plot_accuracy_per_target(df, output_dir)
     plot_energy_efficiency(df, output_dir)
+
+    # Distribution analysis plots (new)
+    plot_latency_distribution_violin(df, output_dir)
+    plot_percentile_comparison(df, output_dir)
+    plot_tail_latency_analysis(df, output_dir)
 
     logger.info(f"All plots generated in {output_dir}")

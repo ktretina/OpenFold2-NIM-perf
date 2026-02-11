@@ -270,46 +270,69 @@ class BenchmarkOrchestrator:
             torch_version=metadata_dict.get("torch_version"),
         )
 
-    def _run_warmup(self):
-        """Run warmup predictions to warm caches."""
-        logger.info("Running warmup predictions...")
+    def _run_warmup(self, suite: BenchmarkSuite, targets: list[dict]):
+        """Run dedicated warmup passes over all targets.
 
-        # Use first suite for warmup
-        if not self.config.suites:
-            logger.warning("No suites configured, skipping warmup")
+        Args:
+            suite: Benchmark suite configuration
+            targets: List of target dictionaries
+        """
+        if suite.warmup_passes == 0:
+            logger.info("Warmup disabled for suite: %s", suite.name)
             return
 
-        suite = self.config.suites[0]
-        targets = self._load_targets(suite)
+        logger.info("Running %d warmup pass(es) for suite: %s",
+                    suite.warmup_passes, suite.name)
 
-        if not targets:
-            logger.warning("No targets found for warmup")
-            return
+        # Determine MSA depths
+        msa_depths = suite.msa_depths if suite.msa_depths else [suite.msa_depth]
 
-        # Use first target
-        target = targets[0]
+        for pass_idx in range(suite.warmup_passes):
+            logger.info("WARMUP PASS %d/%d", pass_idx + 1, suite.warmup_passes)
 
-        # Run warmup for each runner
-        for system_name, runner in self.runners.items():
-            variants = self._get_variants(system_name)
-            for variant in variants[:1]:  # Just first variant
-                logger.info("Warmup: %s - %s", system_name, variant)
-                try:
-                    models = self._parse_models_from_variant(system_name, variant)
-                    runner.predict(
-                        target_id=f"warmup_{target['id']}",
-                        sequence=target["sequence"],
-                        msa_depth=suite.msa_depth,
-                        variant=variant,
-                        models=models,
-                    )
-                except Exception as e:
-                    logger.warning("Warmup failed for %s: %s", variant, e)
+            for target in targets:
+                for msa_depth in msa_depths:
+                    for system_name, runner in self.runners.items():
+                        variants = self._get_variants(system_name)
+                        for variant in variants:
+                            try:
+                                models = self._parse_models_from_variant(system_name, variant)
 
-        logger.info("Warmup completed")
+                                # Run prediction (results discarded)
+                                _ = runner.predict(
+                                    target_id=f"warmup_{target['id']}",
+                                    sequence=target['sequence'],
+                                    msa_depth=msa_depth,
+                                    variant=variant,
+                                    models=models,
+                                )
+                                logger.debug("Warmup: %s - %s - %s (MSA=%d)",
+                                           target['id'], system_name, variant, msa_depth)
+                            except Exception as e:
+                                logger.warning("Warmup failed for %s-%s: %s",
+                                             system_name, variant, e)
+
+        logger.info("Warmup complete")
 
     def _run_suite(self, suite: BenchmarkSuite):
-        """Run a benchmark suite."""
+        """Run a benchmark suite (dispatcher).
+
+        Args:
+            suite: Benchmark suite configuration
+        """
+        if suite.suite_type == "cold_start":
+            self._run_cold_start_suite(suite)
+        else:
+            self._run_standard_suite(suite)
+
+    def _run_standard_suite(self, suite: BenchmarkSuite):
+        """Run standard benchmark suite with warmup and measurement phases.
+
+        Args:
+            suite: Benchmark suite configuration
+        """
+        logger.info("Running suite: %s", suite.name)
+
         targets = self._load_targets(suite)
 
         if not targets:
@@ -318,31 +341,77 @@ class BenchmarkOrchestrator:
 
         logger.info("Suite %s: %d targets", suite.name, len(targets))
 
+        # Load precomputed MSAs if configured
+        if suite.precomputed_msa_dir:
+            logger.info("Using precomputed MSAs from %s", suite.precomputed_msa_dir)
+            from bench.dataset.precomputed import load_precomputed_inputs
+
+            for target in targets:
+                try:
+                    precomputed = load_precomputed_inputs(
+                        target['id'],
+                        suite.precomputed_msa_dir
+                    )
+                    target['precomputed'] = precomputed
+                    logger.debug("Loaded precomputed MSA for %s (hash: %s...)",
+                               target['id'], precomputed.msa_hash[:16])
+                except FileNotFoundError:
+                    if suite.inference_only_mode:
+                        logger.error("Precomputed MSA not found for %s (inference_only_mode=true)",
+                                   target['id'])
+                        raise
+                    else:
+                        logger.warning("Precomputed MSA not found for %s, will generate on-the-fly",
+                                     target['id'])
+                except Exception as e:
+                    logger.error("Failed to load precomputed MSA for %s: %s",
+                               target['id'], e)
+                    if suite.inference_only_mode:
+                        raise
+
         # Determine MSA depths to test
         msa_depths = suite.msa_depths if suite.msa_depths else [suite.msa_depth]
 
-        # Run predictions
-        for target in targets:
-            for msa_depth in msa_depths:
-                for system_name, runner in self.runners.items():
-                    variants = self._get_variants(system_name)
+        # Phase 1: Warmup
+        self._run_warmup(suite, targets)
 
-                    for variant in variants:
-                        models = self._parse_models_from_variant(system_name, variant)
+        # Phase 2: Measurement passes
+        measurement_passes = suite.measurement_passes
+        logger.info("Running %d measurement pass(es)", measurement_passes)
 
-                        # Run repeats
-                        for repeat_idx in range(suite.repeats):
+        for pass_idx in range(measurement_passes):
+            logger.info("MEASUREMENT PASS %d/%d", pass_idx + 1, measurement_passes)
+
+            # Shuffle targets if configured
+            targets_for_pass = targets.copy()
+            if suite.shuffle_targets_each_pass:
+                import random
+                random.shuffle(targets_for_pass)
+                logger.info("Shuffled target order for this pass")
+
+            # Run predictions on all targets
+            for target in targets_for_pass:
+                for msa_depth in msa_depths:
+                    for system_name, runner in self.runners.items():
+                        variants = self._get_variants(system_name)
+
+                        for variant in variants:
+                            models = self._parse_models_from_variant(system_name, variant)
+
                             logger.info(
-                                "Predicting: %s | %s | %s | MSA=%d | Repeat %d/%d",
+                                "Predicting: %s | %s | %s | MSA=%d | Pass %d/%d",
                                 suite.name,
                                 target["id"],
                                 variant,
                                 msa_depth,
-                                repeat_idx + 1,
-                                suite.repeats,
+                                pass_idx + 1,
+                                measurement_passes,
                             )
 
                             try:
+                                # Get precomputed inputs if available
+                                precomputed_inputs = target.get('precomputed')
+
                                 # Run prediction
                                 result = runner.predict(
                                     target_id=target["id"],
@@ -350,6 +419,7 @@ class BenchmarkOrchestrator:
                                     msa_depth=msa_depth,
                                     variant=variant,
                                     models=models,
+                                    precomputed_inputs=precomputed_inputs,
                                 )
 
                                 # Save timeseries
@@ -360,6 +430,8 @@ class BenchmarkOrchestrator:
                                 # Compute accuracy if ground truth available
                                 ca_rmsd = None
                                 ca_lddt = None
+                                tm_score = None
+                                gdt_ts = None
 
                                 if "ground_truth_coords" in target:
                                     try:
@@ -368,13 +440,21 @@ class BenchmarkOrchestrator:
                                         )
                                         true_coords = target["ground_truth_coords"]
 
+                                        # Import scoring functions
+                                        from bench.scoring.tmscore import compute_tm_score
+                                        from bench.scoring.gdtts import compute_gdt_ts
+
                                         ca_rmsd = kabsch_rmsd(pred_coords, true_coords)
                                         ca_lddt = compute_lddt(pred_coords, true_coords)
+                                        tm_score = compute_tm_score(pred_coords, true_coords)
+                                        gdt_ts = compute_gdt_ts(pred_coords, true_coords)
 
                                         logger.info(
-                                            "Accuracy: RMSD=%.2f Å, lDDT=%.3f",
+                                            "Accuracy: RMSD=%.2f Å, lDDT=%.3f, TM-score=%.3f, GDT_TS=%.1f",
                                             ca_rmsd,
                                             ca_lddt,
+                                            tm_score,
+                                            gdt_ts,
                                         )
                                     except Exception as e:
                                         logger.warning(
@@ -384,6 +464,11 @@ class BenchmarkOrchestrator:
                                 # Compute GPU hours
                                 num_gpus = len(self.config.gpu.device_ids)
                                 gpu_hours = result.wall_time_s * num_gpus / 3600.0
+
+                                # Get MSA hash if precomputed
+                                msa_hash = None
+                                if precomputed_inputs:
+                                    msa_hash = precomputed_inputs.msa_hash
 
                                 # Create record
                                 record = PredictionRecord(
@@ -405,13 +490,18 @@ class BenchmarkOrchestrator:
                                     cpu_util_avg_pct=result.cpu_util_avg_pct,
                                     ca_rmsd=ca_rmsd,
                                     ca_lddt=ca_lddt,
+                                    tm_score=tm_score,
+                                    gdt_ts=gdt_ts,
                                     mean_plddt=result.mean_plddt,
                                     sequence_length=len(target["sequence"]),
                                     msa_depth=msa_depth,
                                     models_used=models,
                                     output_structure_path=result.output_structure_path,
                                     timeseries_path=timeseries_path,
-                                    repeat_index=repeat_idx,
+                                    pass_index=pass_idx,
+                                    is_warmup=False,
+                                    msa_template_hash=msa_hash,
+                                    repeat_index=pass_idx,  # Backward compatibility
                                 )
 
                                 # Write record
@@ -425,6 +515,106 @@ class BenchmarkOrchestrator:
                                     e,
                                     exc_info=True,
                                 )
+
+    def _run_cold_start_suite(self, suite: BenchmarkSuite):
+        """Run cold-start benchmark with container restarts.
+
+        Measures:
+        - Container startup time (stop to ready)
+        - First request latency (cold)
+        - Second request latency (warm)
+
+        Args:
+            suite: Benchmark suite configuration with suite_type="cold_start"
+        """
+        logger.info("Running COLD-START suite: %s", suite.name)
+
+        if "nim" not in self.runners:
+            logger.warning("Cold-start suite requires NIM, but NIM is not enabled")
+            return
+
+        targets = self._load_targets(suite)
+        if not targets:
+            logger.warning("No targets in cold-start suite %s", suite.name)
+            return
+
+        nim_runner = self.runners["nim"]
+        variant = self._get_variants("nim")[0]  # Use first NIM variant
+        models = self._parse_models_from_variant("nim", variant)
+
+        # Import ColdStartRecord
+        from bench.results.schema import ColdStartRecord
+
+        for target in targets:
+            sequence = target['sequence']
+            target_id = target['id']
+
+            for restart_idx in range(suite.measurement_passes):
+                logger.info("Cold start %d/%d for %s",
+                           restart_idx + 1, suite.measurement_passes, target_id)
+
+                # Stop NIM container
+                logger.info("Stopping NIM container...")
+                nim_runner.stop()
+
+                # Measure container startup time
+                import time
+                t0 = time.time()
+                nim_runner.start()
+                container_ready_time = time.time() - t0
+                logger.info("Container ready in %.2f seconds", container_ready_time)
+
+                # First request (cold)
+                t1 = time.time()
+                try:
+                    result1 = nim_runner.predict(
+                        target_id=f"{target_id}_cold",
+                        sequence=sequence,
+                        msa_depth=suite.msa_depth,
+                        variant=variant,
+                        models=models,
+                    )
+                    first_request_time = time.time() - t1
+                    logger.info("First request (cold): %.2f seconds", first_request_time)
+                except Exception as e:
+                    logger.error("First request failed: %s", e)
+                    continue
+
+                # Second request (warm)
+                t2 = time.time()
+                try:
+                    result2 = nim_runner.predict(
+                        target_id=f"{target_id}_warm",
+                        sequence=sequence,
+                        msa_depth=suite.msa_depth,
+                        variant=variant,
+                        models=models,
+                    )
+                    second_request_time = time.time() - t2
+                    logger.info("Second request (warm): %.2f seconds", second_request_time)
+                except Exception as e:
+                    logger.error("Second request failed: %s", e)
+                    continue
+
+                # Save cold start record
+                record = ColdStartRecord(
+                    run_id=self.config.run_id,
+                    suite=suite.name,
+                    target_id=target_id,
+                    system="nim",
+                    variant=variant,
+                    container_start_time_s=container_ready_time,
+                    first_request_time_s=first_request_time,
+                    second_request_time_s=second_request_time,
+                    restart_index=restart_idx,
+                    timestamp=datetime.now()
+                )
+
+                self.writer.append_cold_start_record(record)
+                logger.info("Cold start recorded: container=%.2fs, first=%.2fs, second=%.2fs",
+                           container_ready_time, first_request_time, second_request_time)
+
+        logger.info("Cold-start suite complete")
 
     def _load_targets(self, suite: BenchmarkSuite) -> list[dict]:
         """Load targets for a suite."""

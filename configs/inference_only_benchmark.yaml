@@ -1,0 +1,63 @@
+# Apples-to-Apples Inference-Only Benchmark
+#
+# This configuration uses precomputed MSAs to ensure IDENTICAL inputs for both
+# NIM and OpenFold, transforming the benchmark from an "MSA pipeline benchmark"
+# into a pure "inference benchmark".
+#
+# Key Features:
+# - Precomputed MSAs with hash verification
+# - Proper warmup/measurement separation
+# - Sufficient samples for distribution statistics
+# - AlphaFold official weights for model parity
+
+output_dir: ${RESULTS_DIR:-results}/inference_only
+run_id: null  # Auto-generated timestamp
+
+gpu:
+  device_ids: [0]
+  sampling_interval_ms: 50
+
+nim:
+  enabled: true
+  container_image: "nvcr.io/nim/openfold/openfold2:1.0"
+  warn_on_latest_tag: true
+  cache_dir: "${FAST_CACHE:-$HOME}/nim_cache"
+  backend: "tensorrt"
+  model_sets:
+    - [3]                 # Single model (model_3)
+    - [1, 2, 3, 4, 5]    # Full ensemble (5 models)
+
+openfold:
+  enabled: true
+  repo_path: "${FAST_CACHE:-$HOME}/openfold_repo"
+  commit_hash: "main"
+  model_presets: ["model_3_ptm"]
+  precision: "bf16"
+  weights_source: "alphafold_official"  # Match NIM's parameter lineage
+
+suites:
+  - name: inference_only_casp15
+    targets_file: bench/dataset/casp15_targets.yaml
+    msa_depth: 128
+
+    # Precomputation settings
+    inference_only_mode: true
+    precomputed_msa_dir: "data/precomputed/casp15_msa128"
+
+    # Statistical rigor
+    warmup_passes: 5
+    measurement_passes: 10
+    shuffle_targets_each_pass: true
+
+# Before running this benchmark:
+# 1. Generate precomputed MSAs:
+#    python scripts/precompute_msas.py \
+#      --targets bench/dataset/casp15_targets.yaml \
+#      --output data/precomputed/casp15_msa128 \
+#      --msa-depth 128
+#
+# 2. Run benchmark:
+#    bench run --config configs/inference_only_benchmark.yaml
+#
+# 3. Analyze results:
+#    bench analyze results/inference_only/latest
