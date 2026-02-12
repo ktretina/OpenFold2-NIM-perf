@@ -1,0 +1,42 @@
+# Smoke test configuration for quick validation
+# Runs in ~1-2 minutes to verify deployment is working
+#
+# Usage: bench run --config configs/smoke_test.yaml
+
+output_dir: ${PERSIST_DIR:-results}/smoke_test
+
+gpu:
+  device_ids: [0]
+  sampling_interval_ms: 100  # Less frequent sampling for speed
+
+nim:
+  enabled: true
+  container_image: "nvcr.io/nim/openfold/openfold2:latest"
+  cache_dir: "${FAST_WORKDIR:-$HOME/nim_cache}"
+  backend: "tensorrt"
+  model_sets:
+    - [3]  # Single model only for speed
+
+openfold:
+  enabled: false  # Disable OpenFold for quick test
+  repo_path: "${FAST_WORKDIR:-$HOME}/openfold_repo"
+  model_presets: ["model_3_ptm"]
+  precision: "bf16"
+
+suites:
+  - name: smoke_test_suite
+    # Use inline sequences (no file needed)
+    sequences:
+      - id: "tiny_50aa"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNL"
+      - id: "small_100aa"
+        sequence: "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQFEVVHSLAKWKRQTLGQHDFSAGEGLYTHMKALRPDEDRLSPLHSVYVDQWDWERVMGDGERQFSTLKSTVEAIWAGIKATEAAVSEEFGLAPFLPDQIHFVHSQELLSRYPDLDAKGRERAIAKDLGAVFLVGIGGKLSDGHRHDVRAPDYDDWSTPSELGHAGLNGDILVWNPVLEDAFELSSMGIRVDADTLKHQLALTGDEDRLELEWHQALLRGEMPQTIGGGIGQSRLTMLLLQLPHIGQVQAGVWPAAVRESVPSLL"
+
+    msa_depth: 1  # Minimal MSA for speed
+
+    # Quick validation - no warmup needed
+    warmup_passes: 0
+    measurement_passes: 1
+
+    # Standard mode
+    suite_type: "standard"

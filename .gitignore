@@ -52,6 +52,13 @@ structures/
 # Docker
 .env.colossus
 
+# Colossus features
+campaigns/
+checkpoint.json
+requirements.lock
+version_pins.yaml
+configs/generated/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -60,3 +67,4 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+/tmp/

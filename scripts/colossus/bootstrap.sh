@@ -197,12 +197,45 @@ echo "To activate:"
 echo "  source .env.colossus"
 echo ""
 
-# Phase 6: Verify installation
-echo "=== Phase 6: Verification ==="
+# Phase 6: Install Python dependencies
+echo "=== Phase 6: Installing Python Dependencies ==="
+echo ""
+
+# Check if pip is available
+if ! command -v pip3 &> /dev/null; then
+    echo -e "${RED}✗ pip3 not found${NC}"
+    echo "  Install Python 3.10+: https://www.python.org/downloads/"
+    exit 1
+fi
+
+# Install benchmark package
+echo "Installing benchmark package and dependencies..."
+if pip3 install -e . &> /tmp/pip_install.log; then
+    echo -e "${GREEN}✓ Python dependencies installed${NC}"
+else
+    echo -e "${YELLOW}⚠ Some dependencies may have failed (check /tmp/pip_install.log)${NC}"
+    echo "  This is often okay if core dependencies installed successfully"
+fi
+
+echo ""
+
+# Phase 7: Verify installation
+echo "=== Phase 7: Verification ==="
 echo ""
 
 # Check GPU
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1
+
+echo ""
+
+# Verify bench command works
+if command -v bench &> /dev/null; then
+    echo -e "${GREEN}✓ bench command available${NC}"
+    bench --version 2>/dev/null || echo "  (bench CLI installed)"
+else
+    echo -e "${YELLOW}⚠ bench command not in PATH${NC}"
+    echo "  You may need to: source .env.colossus"
+fi
 
 echo ""
 echo "============================================================"
@@ -211,5 +244,6 @@ echo "============================================================"
 echo ""
 echo "Next steps:"
 echo "  1. Activate environment:  source .env.colossus"
-echo "  2. Run benchmark:         ./scripts/colossus/run.sh"
+echo "  2. Run validation:        ./scripts/colossus/validate.sh"
+echo "  3. Run benchmark:         ./scripts/colossus/run.sh"
 echo ""

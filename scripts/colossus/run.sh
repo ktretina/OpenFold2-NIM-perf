@@ -24,6 +24,7 @@ CONFIG=${1:-configs/default.yaml}
 AUTO_DETECT=${AUTO_DETECT:-true}
 CHECKPOINT=${CHECKPOINT:-true}
 PUSH_RESULTS=${PUSH_RESULTS:-false}
+SKIP_VALIDATION=${SKIP_VALIDATION:-false}
 
 echo "============================================================"
 echo "OpenFold2-NIM Benchmark - Colossus One-Click Runner"
@@ -34,6 +35,7 @@ echo "  Base config:     $CONFIG"
 echo "  Auto-detect:     $AUTO_DETECT"
 echo "  Checkpointing:   $CHECKPOINT"
 echo "  Git sync:        $PUSH_RESULTS"
+echo "  Validation:      $([ "$SKIP_VALIDATION" = "true" ] && echo "disabled" || echo "enabled")"
 echo ""
 
 # Get script directory
@@ -86,16 +88,34 @@ if [ "$AUTO_DETECT" = "true" ]; then
     echo ""
 fi
 
-# Phase 3: Preflight validation
-echo "=== Phase 3: Environment Validation ==="
-echo ""
-bench preflight || {
+# Phase 3: Validation
+if [ "$SKIP_VALIDATION" != "true" ]; then
+    echo "=== Phase 3: Environment Validation ==="
     echo ""
-    echo "✗ Preflight checks failed!"
-    echo "  Fix the issues above before running the benchmark."
-    exit 1
-}
-echo ""
+
+    # Run comprehensive validation
+    if [ -x "$SCRIPT_DIR/validate.sh" ]; then
+        "$SCRIPT_DIR/validate.sh" || {
+            echo ""
+            echo "✗ Validation failed!"
+            echo "  Fix the issues above before running the benchmark."
+            echo "  To skip validation: SKIP_VALIDATION=true ./scripts/colossus/run.sh"
+            exit 1
+        }
+    else
+        # Fallback to basic preflight if validate.sh not available
+        bench preflight || {
+            echo ""
+            echo "✗ Preflight checks failed!"
+            echo "  Fix the issues above before running the benchmark."
+            exit 1
+        }
+    fi
+    echo ""
+else
+    echo "=== Phase 3: Validation (skipped) ==="
+    echo ""
+fi
 
 # Phase 4: Run benchmark
 echo "=== Phase 4: Running Benchmark ==="

@@ -2,6 +2,8 @@
 
 World-class benchmarking suite for comparing NVIDIA OpenFold2 NIM microservice against open-source OpenFold with publication-quality statistical rigor.
 
+> **🚀 Deploying on Colossus?** See [COLOSSUS_DEPLOY.md](COLOSSUS_DEPLOY.md) for push-button setup (5 minutes from clone to running benchmarks)
+
 ## Features
 
 ### Core Capabilities
